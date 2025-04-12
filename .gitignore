@@ -1,0 +1,6 @@
+.idea/
+
+Data/*.zip
+Data/Treated/
+
+venv/
