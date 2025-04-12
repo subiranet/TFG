@@ -4,7 +4,7 @@ from transformers import (
     # Bart
     BartTokenizer,
     BartForConditionalGeneration,
-    
+
     # Pegasus
     PegasusTokenizer,
     PegasusForConditionalGeneration,
@@ -14,7 +14,7 @@ from transformers import (
     T5ForConditionalGeneration,
 
     # Mistral
-    AutoTokenizer, 
+    AutoTokenizer,
     AutoModelForCausalLM,
 
     TrainingArguments,
@@ -71,14 +71,14 @@ class TrainingSummarizationPipeline:
         'bart': {
             'tokenizer': BartTokenizer,
             'model': BartForConditionalGeneration,
-            'base_name':'facebook/bart-large-cnn',
+            'base_name': 'facebook/bart-large-cnn',
             'prefix': 'summarize: ',
             'type': 'encoder_decoder'
         },
         'pegasus': {
             'tokenizer': PegasusTokenizer,
             'model': PegasusForConditionalGeneration,
-            'base_name':'google/pegasus-large',
+            'base_name': 'google/pegasus-large',
             'prefix': '',
             'type': 'encoder_decoder'
         },
@@ -99,7 +99,7 @@ class TrainingSummarizationPipeline:
         'mistral instruct': {
             'tokenizer': AutoTokenizer,
             'model': AutoModelForCausalLM,
-            'base_name':'mistralai/Mistral-Small-3.1-24B-Instruct-2503',
+            'base_name': 'mistralai/Mistral-Small-3.1-24B-Instruct-2503',
             'prefix': '[INST] Summarize the following scientific article.\n\n',
             'suffix': '[/INST]',
             'type': 'causal'
@@ -107,7 +107,7 @@ class TrainingSummarizationPipeline:
         'mistral base': {
             'tokenizer': AutoTokenizer,
             'model': AutoModelForCausalLM,
-            'base_name':'mistralai/Mistral-Small-3.1-24B-Base-2503',
+            'base_name': 'mistralai/Mistral-Small-3.1-24B-Base-2503',
             'prefix': 'Summarize the following scientific article.\n\n',
             'type': 'causal'
         }
@@ -169,18 +169,18 @@ class TrainingSummarizationPipeline:
         model_name = self.config['model']['name']
         if model_name not in self.MODEL_MAP:
             raise ValueError(f"Model {model_name} not supported. Available models: {list(self.MODEL_MAP.keys())}")
-        
+
         model_info = self.MODEL_MAP[model_name]
         logger.info(f"Initializing {model_name} model with base {model_info['base_name']}...")
-        
+
         self.tokenizer = model_info['tokenizer'].from_pretrained(model_info['base_name'])
         self.model = model_info['model'].from_pretrained(model_info['base_name']).to(self.device)
-        
+
         # Set padding token if not already set (for Mistral models)
         if model_info['type'] == 'causal' and self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.model.config.pad_token_id = self.model.config.eos_token_id
-        
+
         return self.tokenizer, self.model
 
     @staticmethod
@@ -209,7 +209,7 @@ class TrainingSummarizationPipeline:
     def tokenize_data(self, examples):
         """Tokenize the processed examples with special handling for Mistral models"""
         model_info = self.MODEL_MAP[self.config['model']['name']]
-        
+
         if model_info['type'] == 'encoder_decoder':
             # Standard encoder-decoder models (BART, Pegasus, T5)
             inputs = [f"{model_info['prefix']}{text}" for text in examples['input_text']]
@@ -228,7 +228,7 @@ class TrainingSummarizationPipeline:
             )
 
             model_inputs["labels"] = labels["input_ids"]
-            
+
         else:
             # Causal models (Mistral and variants)
             full_texts = []
@@ -239,7 +239,7 @@ class TrainingSummarizationPipeline:
                     instruction += f" {model_info['suffix']}"
                 full_text = f"{instruction} {target_text}"
                 full_texts.append(full_text)
-            
+
             # Tokenize the full sequence
             tokenized = self.tokenizer(
                 full_texts,
@@ -247,21 +247,22 @@ class TrainingSummarizationPipeline:
                 truncation=True,
                 padding='max_length'
             )
-            
+
             # Create labels by masking the input part
-            input_lengths = [len(self.tokenizer(f"{model_info['prefix']}{text}").input_ids) for text in examples['input_text']]
+            input_lengths = [len(self.tokenizer(f"{model_info['prefix']}{text}").input_ids) for text in
+                             examples['input_text']]
             labels = []
             for i, length in enumerate(input_lengths):
                 label = [-100] * length  # Mask the input part
                 label += tokenized['input_ids'][i][length:]  # Keep the target part
                 labels.append(label)
-            
+
             model_inputs = {
                 'input_ids': tokenized['input_ids'],
                 'attention_mask': tokenized['attention_mask'],
                 'labels': labels
             }
-            
+
         return model_inputs
 
     def prepare_datasets(self):
@@ -324,7 +325,6 @@ class TrainingSummarizationPipeline:
             "rouge-2": np.mean(rouge_scores["rouge2"]),
             "rouge-L": np.mean(rouge_scores["rougeL"]),
         }
-
 
     def train(self):
         """Train the model with configured parameters"""

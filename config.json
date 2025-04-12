@@ -12,5 +12,6 @@
 		"epochs": 3,
 		"LR": 0.00005,
 		"cpu": true
-	}
+	},
+	"model_opt": ["bart", "pegasus", "t5", "trelis", "mistral instruct", "mistral base"]
 }
