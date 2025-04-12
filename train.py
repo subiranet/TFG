@@ -284,46 +284,46 @@ class TrainingSummarizationPipeline:
         return self.train_dataset, self.eval_dataset
 
     def compute_metrics(self, eval_pred):
-    """Compute ROUGE metrics for evaluation"""
-    preds, labels = eval_pred
-    
-    # Handle tuple output (e.g., from seq2seq models)
-    if isinstance(preds, tuple):
-        preds = preds[0]  # Take the first element (logits)
-    
-    # Convert logits to token IDs (if needed)
-    if preds.ndim == 3:  # Shape: [batch_size, seq_len, vocab_size]
-        preds = np.argmax(preds, axis=-1)
-    
-    # Ensure we have integer token IDs
-    preds = np.array(preds, dtype=np.int32)
-    labels = np.array(labels, dtype=np.int32)
-    
-    # Replace -100 (masked tokens) with pad_token_id
-    labels = np.where(labels != -100, labels, self.tokenizer.pad_token_id)
-    
-    # Decode predictions and labels
-    decoded_preds = self.tokenizer.batch_decode(preds, skip_special_tokens=True)
-    decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
-    
-    # Compute ROUGE scores
-    rouge_scores = {
-        "rouge1": [],
-        "rouge2": [],
-        "rougeL": []
-    }
-    
-    for pred, label in zip(decoded_preds, decoded_labels):
-        scores = self.scorer.score(pred, label)
-        rouge_scores["rouge1"].append(scores["rouge1"].fmeasure)
-        rouge_scores["rouge2"].append(scores["rouge2"].fmeasure)
-        rouge_scores["rougeL"].append(scores["rougeL"].fmeasure)
-    
-    return {
-        "rouge-1": np.mean(rouge_scores["rouge1"]),
-        "rouge-2": np.mean(rouge_scores["rouge2"]),
-        "rouge-L": np.mean(rouge_scores["rougeL"]),
-    }
+        """Compute ROUGE metrics for evaluation"""
+        preds, labels = eval_pred
+
+        # Handle tuple output (e.g., from seq2seq models)
+        if isinstance(preds, tuple):
+            preds = preds[0]  # Take the first element (logits)
+
+        # Convert logits to token IDs (if needed)
+        if preds.ndim == 3:  # Shape: [batch_size, seq_len, vocab_size]
+            preds = np.argmax(preds, axis=-1)
+
+        # Ensure we have integer token IDs
+        preds = np.array(preds, dtype=np.int32)
+        labels = np.array(labels, dtype=np.int32)
+
+        # Replace -100 (masked tokens) with pad_token_id
+        labels = np.where(labels != -100, labels, self.tokenizer.pad_token_id)
+
+        # Decode predictions and labels
+        decoded_preds = self.tokenizer.batch_decode(preds, skip_special_tokens=True)
+        decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
+
+        # Compute ROUGE scores
+        rouge_scores = {
+            "rouge1": [],
+            "rouge2": [],
+            "rougeL": []
+        }
+
+        for pred, label in zip(decoded_preds, decoded_labels):
+            scores = self.scorer.score(pred, label)
+            rouge_scores["rouge1"].append(scores["rouge1"].fmeasure)
+            rouge_scores["rouge2"].append(scores["rouge2"].fmeasure)
+            rouge_scores["rougeL"].append(scores["rougeL"].fmeasure)
+
+        return {
+            "rouge-1": np.mean(rouge_scores["rouge1"]),
+            "rouge-2": np.mean(rouge_scores["rouge2"]),
+            "rouge-L": np.mean(rouge_scores["rougeL"]),
+        }
 
 
     def train(self):
