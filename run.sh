@@ -25,6 +25,7 @@ echo ""
 # DATASET DOWNLOAD / EXTRACTION
 DATA_DIR="Data"
 TARGET_FILE="${DATA_DIR}/papers.SSN.jsonl"
+# shellcheck disable=SC2034
 ZIP_FILE="${DATA_DIR}/SSN.zip"
 
 # Check if the target file already exists
@@ -32,7 +33,7 @@ if [ ! -f "${TARGET_FILE}" ]; then
     # Create Data directory if it doesn't exist
     mkdir -p "${DATA_DIR}"
     
-    cd "${DATA_DIR}"
+    cd "${DATA_DIR}" || exit
 
     # Download zip file only if it doesn't exist
     if [ ! -f "SSN.zip" ]; then
