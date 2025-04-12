@@ -3,10 +3,10 @@
 		"name": "bart"
 	},
 	"data": {
-		"total": 1000,
+		"total": 100000,
 		"train": 0.8,
-		"test": 0.15,
-		"eval": 0.05
+		"test": 0.18,
+		"eval": 0.02
 	},
 	"train": {
 		"epochs": 3,
