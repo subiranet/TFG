@@ -2,6 +2,22 @@
 
 sudo apt install python3.12-venv python3-pip python3-full unzip
 
+if [ ! -f "logs" ]; then
+    # Create Data directory if it doesn't exist
+    mkdir -p "logs"
+fi
+
+if [ ! -f "Models" ]; then
+  # Create Data directory if it doesn't exist
+  mkdir -p "Models"
+fi
+
+if [ ! -f "results" ]; then
+  # Create Data directory if it doesn't exist
+  mkdir -p "results"
+fi
+
+
 # Check if python environment exists, if not create it
 if [ ! -d "venv" ]; then
     echo "Creating python virtual environment..."
