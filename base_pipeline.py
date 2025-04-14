@@ -190,7 +190,8 @@ class BaseSummarizationPipeline:
 
         # Compute BLEU using FastBLEU
         bleu_scorer = BLEU(references)
-        bleu_score = bleu_scorer.get_score(candidates)["bleu"]
+        bleu_scores = bleu_scorer.get_score(candidates)
+        bleu_score = np.mean(list(bleu_scores.values()))
 
         # Compute ROUGE-1, ROUGE-2, ROUGE-L F1 scores
         rouge1_list, rouge2_list, rougeL_list = [], [], []
