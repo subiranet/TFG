@@ -8,12 +8,12 @@ from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM
 )
+from fast_bleu import BLEU
 from rouge_score import rouge_scorer
 import logging
 import json
 import torch
 import numpy as np
-
 
 
 class BaseSummarizationPipeline:
@@ -67,6 +67,8 @@ class BaseSummarizationPipeline:
         self.config_path = config_path
         self.config = self._load_config()
         self.device = torch.device("cuda" if torch.cuda.is_available() and not self.config['train']['cpu'] else "cpu")
+        self.rouge_scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
+        self.length_penalty_alpha = 1.0
 
         logging.info(f"Using device: {self.device}")
 
@@ -177,43 +179,51 @@ class BaseSummarizationPipeline:
         return model_inputs
 
     def compute_metrics(self, eval_pred):
-        """Compute ROUGE metrics for evaluation"""
-        preds, labels = eval_pred
-
-        # Handle tuple output (e.g., from seq2seq models)
-        if isinstance(preds, tuple):
-            preds = preds[0]  # Take the first element (logits)
-
-        # Convert logits to token IDs (if needed)
-        if preds.ndim == 3:  # Shape: [batch_size, seq_len, vocab_size]
-            preds = np.argmax(preds, axis=-1)
-
-        # Ensure we have integer token IDs
-        preds = np.array(preds, dtype=np.int32)
-        labels = np.array(labels, dtype=np.int32)
-
-        # Replace -100 (masked tokens) with pad_token_id
-        labels = np.where(labels != -100, labels, self.tokenizer.pad_token_id)
-
-        # Decode predictions and labels
-        decoded_preds = self.tokenizer.batch_decode(preds, skip_special_tokens=True)
+        """Compute BLEU and ROUGE (1, 2, L) metrics with length penalty"""
+        predictions, labels = eval_pred
+        decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
         decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
 
-        # Compute ROUGE scores
-        rouge_scores = {
-            "rouge1": [],
-            "rouge2": [],
-            "rougeL": []
-        }
+        # Tokenize for BLEU
+        references = [[ref.split()] for ref in decoded_labels]
+        candidates = [pred.split() for pred in decoded_preds]
 
-        for pred, label in zip(decoded_preds, decoded_labels):
-            scores = self.scorer.score(pred, label)
-            rouge_scores["rouge1"].append(scores["rouge1"].fmeasure)
-            rouge_scores["rouge2"].append(scores["rouge2"].fmeasure)
-            rouge_scores["rougeL"].append(scores["rougeL"].fmeasure)
+        # Compute BLEU using FastBLEU
+        bleu_scorer = BLEU(references)
+        bleu_score = bleu_scorer.get_score(candidates)["bleu"]
+
+        # Compute ROUGE-1, ROUGE-2, ROUGE-L F1 scores
+        rouge1_list, rouge2_list, rougeL_list = [], [], []
+        for ref, pred in zip(decoded_labels, decoded_preds):
+            scores = self.rouge_scorer.score(ref, pred)
+            rouge1_list.append(scores['rouge1'].fmeasure)
+            rouge2_list.append(scores['rouge2'].fmeasure)
+            rougeL_list.append(scores['rougeL'].fmeasure)
+
+        rouge1_f1 = np.mean(rouge1_list)
+        rouge2_f1 = np.mean(rouge2_list)
+        rougeL_f1 = np.mean(rougeL_list)
+
+        # Compute length ratio and penalty
+        pred_lengths = [len(pred.split()) for pred in decoded_preds]
+        label_lengths = [len(label.split()) for label in decoded_labels]
+        length_ratio = np.mean([p / l if l != 0 else 0 for p, l in zip(pred_lengths, label_lengths)])
+        length_penalty = min(1.0, length_ratio ** self.length_penalty_alpha)
+
+        # F1-style combo of BLEU and ROUGE-L
+        if bleu_score + rougeL_f1 > 0:
+            f1_combo = 2 * bleu_score * rougeL_f1 / (bleu_score + rougeL_f1)
+        else:
+            f1_combo = 0.0
+
+        final_score = f1_combo * length_penalty
 
         return {
-            "rouge-1": np.mean(rouge_scores["rouge1"]),
-            "rouge-2": np.mean(rouge_scores["rouge2"]),
-            "rouge-L": np.mean(rouge_scores["rougeL"]),
+            'bleu': bleu_score,
+            'rouge1': rouge1_f1,
+            'rouge2': rouge2_f1,
+            'rougeL': rougeL_f1,
+            'length_ratio': length_ratio,
+            'combined_f1': f1_combo,
+            'final_score': final_score
         }

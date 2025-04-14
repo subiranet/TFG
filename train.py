@@ -138,7 +138,7 @@ class TrainingSummarizationPipeline(BaseSummarizationPipeline):
             max_steps=max_steps,
             weight_decay=0.01,
             load_best_model_at_end=True,
-            metric_for_best_model='eval-rougelL',
+            metric_for_best_model='eval-final_score',
             greater_is_better=True,
             logging_dir="./logs",
             logging_steps=50,
@@ -153,6 +153,7 @@ class TrainingSummarizationPipeline(BaseSummarizationPipeline):
             args=training_args,
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
+            compute_metrics=self.compute_metrics,
             callbacks=[
                 EarlyStoppingCallback(early_stopping_patience=2),
                 MemoryMonitorCallback(log_interval=50)
