@@ -365,9 +365,12 @@ class BaseSummarizationPipeline:
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
             # Generate output
+            # Ensure max_length doesn't exceed model's maximum context length
+            output_max_length = min(max_length, model_max_length)
+
             outputs = self.model.generate(
                 **inputs,
-                max_length=max_length,
+                max_length=output_max_length,
                 num_beams=num_beams,
                 temperature=temperature,
                 top_k=top_k,
@@ -399,9 +402,15 @@ class BaseSummarizationPipeline:
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
             # Generate output
+            # Calculate input length
+            input_length = inputs['input_ids'].shape[1]
+
+            # Ensure the sum of input_length and max_length doesn't exceed model's maximum context length
+            output_max_length = min(input_length + max_length, model_max_length)
+
             outputs = self.model.generate(
                 **inputs,
-                max_length=inputs['input_ids'].shape[1] + max_length,  # Input length + desired output length
+                max_length=output_max_length,  # Ensure we don't exceed model's maximum context length
                 num_beams=num_beams,
                 temperature=temperature,
                 top_k=top_k,

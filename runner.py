@@ -41,7 +41,34 @@ def main():
 
         # Configure evaluator
         # evaluator.model = trainer.model
-        # evaluator.dataset = trainer.dataset['test']
+        # eval.info("Loading data...")
+        tester.load_data()
+
+        logger.info("Loading model...")
+        tester.model = trainer.model
+
+        logger.info("Preparing dataset...")
+        tester.prepare_dataset()
+
+        logger.info("Generating summaries...")
+        summ = tester.generate_summaries()
+
+        logger.info("Evaluating test...")
+        tester.evaluate_test()
+
+        logger.info("Saving results...")
+        tester.save_results()  # Save both evaluation results and dataset
+
+        logger.info("Testing completed successfully!")
+
+        # Evaluate model
+        # e_results = evaluator.evaluate()
+        #
+        # logger.info(f'\nTraining results for model {trainer.config['model']['name']}:')
+        # logger.info(t_results)
+        #
+        # logger.info(f'\nTraining results for model {evaluator.config['model']['name']}:')
+        # logger.info(e_results)uator.dataset = trainer.dataset['test']
 
         # Test results
         logger.info("Loading data...")
@@ -73,8 +100,9 @@ def main():
         # logger.info(f'\nTraining results for model {evaluator.config['model']['name']}:')
         # logger.info(e_results)
 
+
     except Exception as e:
-        logger.error(f"Py runner execution failed: {str(e)}")
+       logger.error(f"Py runner execution failed: {str(e)}")
 
 
 if __name__ == "__main__":

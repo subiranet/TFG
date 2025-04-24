@@ -121,7 +121,7 @@ class TestModel(EvaluationSummarizationPipeline):
             # Use the generate_output function
             output = self.generate_output(
                 input_text=input_text,
-                max_length=5000,
+                max_length=150,  # Reduced from 5000 to avoid integer overflow
                 num_beams=4,
                 temperature=1.0
             )

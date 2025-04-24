@@ -131,8 +131,8 @@ class TrainingSummarization(BaseSummarizationPipeline):
         # Configure data collator with padding and truncation
         data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer,
-            padding=True,
-            max_length=getattr(self.tokenizer, 'model_max_length', 2048),
+            padding='max_length',
+            max_length=512,  # Use a reasonable fixed value instead of model_max_length
             pad_to_multiple_of=8  # Optimize for GPU efficiency
         )
 
