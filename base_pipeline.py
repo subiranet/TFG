@@ -359,7 +359,7 @@ class BaseSummarizationPipeline:
                 prefixed_input, 
                 return_tensors="pt", 
                 truncation=True, 
-                padding=True,
+                padding='max_length',
                 max_length=input_max_length
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
@@ -393,7 +393,7 @@ class BaseSummarizationPipeline:
                 formatted_input, 
                 return_tensors="pt", 
                 truncation=True, 
-                padding=True,
+                padding='max_length',
                 max_length=input_max_length
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}

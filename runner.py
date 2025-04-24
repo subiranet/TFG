@@ -64,7 +64,6 @@ def main():
 
         logger.info("Testing completed successfully!")
 
-
         # Evaluate model
         # e_results = evaluator.evaluate()
         #
@@ -76,6 +75,7 @@ def main():
 
     except Exception as e:
         logger.error(f"Py runner execution failed: {str(e)}")
+
 
 if __name__ == "__main__":
     main()

@@ -126,11 +126,14 @@ class TestModel(EvaluationSummarizationPipeline):
                 temperature=1.0
             )
 
-            logger.info(f"Generated summary for paper {self.paper_id[i]}: {output}")
-
-            # Store the output in our map
+            # Check if i is within the bounds of self.paper_id
             if i < len(self.paper_id):
-                generated_outputs[self.paper_id[i]] = output
+                paper_id = self.paper_id[i]
+                logger.info(f"Generated summary for paper {paper_id}: {output}")
+                # Store the output in our map
+                generated_outputs[paper_id] = output
+            else:
+                logger.info(f"Generated summary for example {i}: {output}")
 
             # Update the example with the output
             text['output_text'] = output
