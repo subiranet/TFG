@@ -1,6 +1,7 @@
 {
 	"model": {
-		"name": "bart"
+		"name": "tinyLlama",
+		"trained": false
 	},
 	"data": {
 		"total": 50000,
@@ -11,7 +12,12 @@
 	"train": {
 		"epochs": 3,
 		"LR": 0.00005,
-		"cpu": true
+		"cpu": false
 	},
-	"model_opt": ["bart", "pegasus", "t5", "trelis", "mistral instruct", "mistral base"]
+	"eval": {
+		"random": false,
+		"size": 10,
+		"ids": []
+	},
+	"model_opt": ["bart", "pegasus", "t5", "tinyLlama", "arxiv", "scibert"]
 }

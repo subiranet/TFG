@@ -3,10 +3,8 @@ from transformers import (
     BartForConditionalGeneration,
     PegasusTokenizer,
     PegasusForConditionalGeneration,
-    T5Tokenizer,
-    T5ForConditionalGeneration,
     AutoTokenizer,
-    AutoModelForCausalLM
+    AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoModel
 )
 from fast_bleu import BLEU
 from rouge_score import rouge_scorer
@@ -21,39 +19,44 @@ class BaseSummarizationPipeline:
         'bart': {
             'tokenizer': BartTokenizer,
             'model': BartForConditionalGeneration,
+            'base_name': 'facebook/bart-large-cnn',
             'prefix': 'summarize: ',
             'type': 'encoder_decoder'
         },
         'pegasus': {
             'tokenizer': PegasusTokenizer,
             'model': PegasusForConditionalGeneration,
+            'base_name': 'google/pegasus-large',
+            'prefix': '',
+            'type': 'encoder_decoder'
+        },
+        'arxiv': {
+            'tokenizer': AutoTokenizer,
+            'model': AutoModelForSeq2SeqLM,
+            'base_name': 'google/bigbird-pegasus-large-arxiv',
             'prefix': '',
             'type': 'encoder_decoder'
         },
         't5': {
-            'tokenizer': T5Tokenizer,
-            'model': T5ForConditionalGeneration,
+            'tokenizer': AutoTokenizer,
+            'model': AutoModelForSeq2SeqLM,
+            'base_name': 'pszemraj/long-t5-tglobal-base-16384-book-summary',
             'prefix': 'summarize: ',
             'type': 'encoder_decoder'
         },
-        'trelis': {
+        'tinyLlama': {
             'tokenizer': AutoTokenizer,
             'model': AutoModelForCausalLM,
-            'prefix': '[INST] Summarize the following academic paper:\n\n',
+            'base_name': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+            'prefix': 'Summarize the following scientific article and create the abstract.\n\n',
             'type': 'causal'
         },
-        'mistral instruct': {
+        'scibert': {
             'tokenizer': AutoTokenizer,
-            'model': AutoModelForCausalLM,
-            'prefix': '[INST] Summarize the following scientific article.\n\n',
-            'suffix': '[/INST]',
-            'type': 'causal'
-        },
-        'mistral base': {
-            'tokenizer': AutoTokenizer,
-            'model': AutoModelForCausalLM,
-            'prefix': 'Summarize the following scientific article.\n\n',
-            'type': 'causal'
+            'model': AutoModelForSeq2SeqLM,
+            'base_name': 'allenai/led-large-16384',
+            'prefix': 'Summarize the following scientific article and create the abstract.\n\n',
+            'type': 'encoder_decoder'
         }
     }
 
@@ -67,7 +70,6 @@ class BaseSummarizationPipeline:
         self.config_path = config_path
         self.config = self._load_config()
         self.device = torch.device("cuda" if torch.cuda.is_available() and not self.config['train']['cpu'] else "cpu")
-        self.rouge_scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
         self.length_penalty_alpha = 1.0
 
         logging.info(f"Using device: {self.device}")
@@ -89,12 +91,12 @@ class BaseSummarizationPipeline:
     def _get_data_directory(self):
         """Generate data directory path from config"""
         data_config = self.config['data']
-        dir_name = (f"{int(data_config['train'] * 100)}-"
-                    f"{int(data_config['test'] * 100)}-"
-                    f"{int(data_config['eval'] * 100)}-"
-                    f"{data_config['total']}")
+        self.dir_name = (f"{int(data_config['train'] * 100)}-"
+                         f"{int(data_config['test'] * 100)}-"
+                         f"{int(data_config['eval'] * 100)}-"
+                         f"{data_config['total']}")
 
-        return f"./Data/Treated/{dir_name}"
+        return f"./Data/Treated/{self.dir_name}"
 
     @staticmethod
     def merge_sections(text, section_names):
@@ -178,25 +180,19 @@ class BaseSummarizationPipeline:
 
         return model_inputs
 
-    def compute_metrics(self, eval_pred):
-        """Compute BLEU and ROUGE (1, 2, L) metrics with length penalty"""
-        predictions, labels = eval_pred
-        decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
-        decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
+    def compute_metrics(self, decoded_labels: list[str], decoded_preds: list[str]):
 
-        # Tokenize for BLEU
         references = [[ref.split()] for ref in decoded_labels]
+        bleu_ref = [ref.split() for ref in decoded_labels]
         candidates = [pred.split() for pred in decoded_preds]
 
-        # Compute BLEU using FastBLEU
-        bleu_scorer = BLEU(references)
+        bleu_scorer = BLEU(bleu_ref)
         bleu_scores = bleu_scorer.get_score(candidates)
         bleu_score = np.mean(list(bleu_scores.values()))
 
-        # Compute ROUGE-1, ROUGE-2, ROUGE-L F1 scores
         rouge1_list, rouge2_list, rougeL_list = [], [], []
         for ref, pred in zip(decoded_labels, decoded_preds):
-            scores = self.rouge_scorer.score(ref, pred)
+            scores = self.scorer.score(ref, pred)
             rouge1_list.append(scores['rouge1'].fmeasure)
             rouge2_list.append(scores['rouge2'].fmeasure)
             rougeL_list.append(scores['rougeL'].fmeasure)
@@ -205,13 +201,11 @@ class BaseSummarizationPipeline:
         rouge2_f1 = np.mean(rouge2_list)
         rougeL_f1 = np.mean(rougeL_list)
 
-        # Compute length ratio and penalty
         pred_lengths = [len(pred.split()) for pred in decoded_preds]
         label_lengths = [len(label.split()) for label in decoded_labels]
         length_ratio = np.mean([p / l if l != 0 else 0 for p, l in zip(pred_lengths, label_lengths)])
         length_penalty = min(1.0, length_ratio ** self.length_penalty_alpha)
 
-        # F1-style combo of BLEU and ROUGE-L
         if bleu_score + rougeL_f1 > 0:
             f1_combo = 2 * bleu_score * rougeL_f1 / (bleu_score + rougeL_f1)
         else:
@@ -228,3 +222,155 @@ class BaseSummarizationPipeline:
             'combined_f1': f1_combo,
             'final_score': final_score
         }
+
+    def compute_metrics_model(self, eval_pred):
+        """Compute BLEU and ROUGE (1, 2, L) metrics with length penalty"""
+        predictions, labels = eval_pred
+
+        # Handle the case where predictions are tuples (from generative models)
+        if isinstance(predictions, tuple):
+            predictions = predictions[0]
+
+        # Convert predictions to numpy array if they're tensors
+        if isinstance(predictions, torch.Tensor):
+            predictions = predictions.detach().cpu().numpy()
+        if isinstance(labels, torch.Tensor):
+            labels = labels.detach().cpu().numpy()
+
+        # Decode predictions and labels
+        decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+
+        # Replace -100 (masked tokens) with pad_token_id before decoding labels
+        labels = np.where(labels != -100, labels, self.tokenizer.pad_token_id)
+        decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
+
+        return self.compute_metrics(decoded_labels, decoded_preds)
+
+
+    def initialize_model(self):
+        """Load tokenizer and model based on config"""
+        model_name = self.config['model']['name']
+        if model_name not in self.MODEL_MAP:
+            raise ValueError(f"Model {model_name} not supported. Available models: {list(self.MODEL_MAP.keys())}")
+
+        model_info = self.MODEL_MAP[model_name]
+        logging.info(f"Initializing {model_name} model with base {model_info['base_name']}...")
+
+        self.tokenizer = model_info['tokenizer'].from_pretrained(model_info['base_name'])
+        self.model = model_info['model'].from_pretrained(model_info['base_name']).to(self.device)
+
+        # Set padding token if not already set (for Mistral models)
+        if model_info['type'] == 'causal' and self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.model.config.pad_token_id = self.model.config.eos_token_id
+
+        return self.tokenizer, self.model
+
+    def load_model_from_dir(self, model_dir):
+        try:
+            # Extract model name from directory path
+            model_name = self.config['model']['name']
+            if model_name not in self.MODEL_MAP:
+                raise ValueError(f"Model {model_name} not supported. Available models: {list(self.MODEL_MAP.keys())}")
+
+            model_info = self.MODEL_MAP[model_name]
+            logging.info(f"Loading {model_name} model from {model_dir}...")
+
+            # Load tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(model_dir)
+
+            # Load model based on model type
+            if model_info['type'] == 'encoder_decoder':
+                self.model = AutoModelForSeq2SeqLM.from_pretrained(model_dir)
+            elif model_info['type'] == 'causal':
+                self.model = AutoModelForCausalLM.from_pretrained(model_dir)
+            else:
+                raise ValueError(f"Unknown model type: {model_info['type']}")
+
+            # Set padding token if not already set (for Mistral models)
+            if model_info['type'] == 'causal' and self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+                self.model.config.pad_token_id = self.model.config.eos_token_id
+
+            self.model.to(self.device)
+        except Exception as e:
+            logging.error(f'Error loading local model {model_dir}:\n{e}')
+
+    def generate_output(self, input_text, max_length=150, num_beams=4, temperature=1.0, top_k=50, top_p=0.95):
+        """
+        Generate output from a model for the given input text.
+
+        Args:
+            input_text (str): The input text to generate a response for
+            max_length (int, optional): Maximum length of the generated text. Defaults to 150.
+            num_beams (int, optional): Number of beams for beam search. Defaults to 4.
+            temperature (float, optional): Temperature for sampling. Defaults to 1.0.
+            top_k (int, optional): Top-k sampling parameter. Defaults to 50.
+            top_p (float, optional): Top-p sampling parameter. Defaults to 0.95.
+
+        Returns:
+            str: The generated text
+        """
+        if self.model is None or self.tokenizer is None:
+            raise ValueError("Model and tokenizer must be initialized before generating output")
+
+        # Get model info
+        model_name = self.config['model']['name']
+        model_info = self.MODEL_MAP[model_name]
+        model_type = model_info['type']
+
+        # Move model to the correct device
+        self.model.to(self.device)
+
+        # Prepare input based on model type
+        if model_type == 'encoder_decoder':
+            # Add prefix for encoder-decoder models
+            prefixed_input = f"{model_info['prefix']}{input_text}"
+
+            # Tokenize input
+            inputs = self.tokenizer(prefixed_input, return_tensors="pt", truncation=True, max_length=512)
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            # Generate output
+            outputs = self.model.generate(
+                **inputs,
+                max_length=max_length,
+                num_beams=num_beams,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                no_repeat_ngram_size=3,
+                early_stopping=True
+            )
+
+        else:  # causal model
+            # Format input with prefix and suffix if available
+            formatted_input = f"{model_info['prefix']}{input_text}"
+            if 'suffix' in model_info:
+                formatted_input += f" {model_info['suffix']}"
+
+            # Tokenize input
+            inputs = self.tokenizer(formatted_input, return_tensors="pt", truncation=True, max_length=512)
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            # Generate output
+            outputs = self.model.generate(
+                **inputs,
+                max_length=inputs['input_ids'].shape[1] + max_length,  # Input length + desired output length
+                num_beams=num_beams,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+                no_repeat_ngram_size=3
+            )
+
+            # For causal models, we need to remove the input tokens from the output
+            input_length = inputs['input_ids'].shape[1]
+            outputs = outputs[:, input_length:]
+
+        # Decode the generated output
+        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        return generated_text

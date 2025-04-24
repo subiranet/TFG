@@ -57,7 +57,7 @@ class MemoryMonitorCallback(TrainerCallback):
         self.last_message_length = len(message)
 
 
-class TrainingSummarizationPipeline(BaseSummarizationPipeline):
+class TrainingSummarization(BaseSummarizationPipeline):
     def __init__(self, config_path='./config.json'):
         super().__init__(config_path)
         self.trainer = None
@@ -78,24 +78,6 @@ class TrainingSummarizationPipeline(BaseSummarizationPipeline):
         )
         return self.dataset
 
-    def initialize_model(self):
-        """Load tokenizer and model based on config"""
-        model_name = self.config['model']['name']
-        if model_name not in self.MODEL_MAP:
-            raise ValueError(f"Model {model_name} not supported. Available models: {list(self.MODEL_MAP.keys())}")
-
-        model_info = self.MODEL_MAP[model_name]
-        logging.info(f"Initializing {model_name} model with base {model_info['base_name']}...")
-
-        self.tokenizer = model_info['tokenizer'].from_pretrained(model_info['base_name'])
-        self.model = model_info['model'].from_pretrained(model_info['base_name']).to(self.device)
-
-        # Set padding token if not already set (for Mistral models)
-        if model_info['type'] == 'causal' and self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-            self.model.config.pad_token_id = self.model.config.eos_token_id
-
-        return self.tokenizer, self.model
 
     def prepare_datasets(self):
         """Apply preprocessing and tokenization to datasets"""
@@ -153,7 +135,7 @@ class TrainingSummarizationPipeline(BaseSummarizationPipeline):
             args=training_args,
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
-            compute_metrics=self.compute_metrics,
+            compute_metrics=self.compute_metrics_model,
             callbacks=[
                 EarlyStoppingCallback(early_stopping_patience=2),
                 MemoryMonitorCallback(log_interval=50)
@@ -178,7 +160,43 @@ class TrainingSummarizationPipeline(BaseSummarizationPipeline):
         if not hasattr(self, 'trainer'):
             raise ValueError("Model must be trained before saving")
 
+        output_dir = f'{output_dir}/{self.config['model']['name']}-{self.dir_name}'
+        os.mkdir(output_dir)
+
         logging.info(f"Saving model to {output_dir}")
         self.trainer.save_model(output_dir)
         self.tokenizer.save_pretrained(output_dir)
         logging.info("Model saved successfully")
+
+
+def main():
+    try:
+        # Initialize trainer
+        trainer = TrainingSummarization()
+
+        # Load data
+        trainer.load_data()
+
+        # Initialize model components
+        trainer.initialize_model()
+
+        # Prepare datasets
+        trainer.prepare_datasets()
+
+        # Train
+        results = trainer.train()
+
+        # Save model
+        trainer.save_model()
+
+        logger.info(f'\nTraining results for model {trainer.config['model']['name']}:')
+        logger.info(results)
+
+
+    except Exception as e:
+        print(f"Training execution failed: {str(e)}")
+        raise
+
+
+if __name__ == "__main__":
+    main()
