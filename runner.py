@@ -76,3 +76,6 @@ def main():
 
     except Exception as e:
         logger.error(f"Py runner execution failed: {str(e)}")
+
+if __name__ == "__main__":
+    main()
