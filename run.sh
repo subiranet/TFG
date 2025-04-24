@@ -80,11 +80,8 @@ fi
 echo "Data transforming and splitting"
 python Data/Utils/transformer.py
 
-echo "Running train"
-python train.py
-
-echo "Running evaluation"
-python evaluate.py
+echo "Running pipeline"
+python runner.py
 
 # Deactivate the virtual environment when done
 deactivate
