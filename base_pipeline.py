@@ -128,18 +128,28 @@ class BaseSummarizationPipeline:
         if model_info['type'] == 'encoder_decoder':
             # Standard encoder-decoder models (BART, Pegasus, T5)
             inputs = [f"{model_info['prefix']}{text}" for text in examples['input_text']]
+
+            # Get model's max context length or default to 2048 if not specified
+            model_max_length = getattr(self.tokenizer, 'model_max_length', 2048)
+
+            # Ensure we don't exceed the model's maximum context length
+            input_max_length = min(512, model_max_length)
+            target_max_length = min(150, model_max_length)
+
             model_inputs = self.tokenizer(
                 inputs,
-                max_length=512,
+                max_length=input_max_length,
                 truncation=True,
-                padding='max_length'
+                padding='max_length',
+                return_tensors='pt'
             )
 
             labels = self.tokenizer(
                 text_target=examples['target_text'],
                 padding='max_length',
                 truncation=True,
-                max_length=150
+                max_length=target_max_length,
+                return_tensors='pt'
             )
 
             model_inputs["labels"] = labels["input_ids"]
@@ -155,17 +165,28 @@ class BaseSummarizationPipeline:
                 full_text = f"{instruction} {target_text}"
                 full_texts.append(full_text)
 
+            # Get model's max context length or default to 2048 if not specified
+            model_max_length = getattr(self.tokenizer, 'model_max_length', 2048)
+
+            # Ensure we don't exceed the model's maximum context length
+            max_length = min(512 + 150, model_max_length)  # Input + target length
+
             # Tokenize the full sequence
             tokenized = self.tokenizer(
                 full_texts,
-                max_length=512 + 150,  # Input + target length
+                max_length=max_length,
                 truncation=True,
-                padding='max_length'
+                padding='max_length',
+                return_tensors='pt'  # Ensure we get PyTorch tensors
             )
 
             # Create labels by masking the input part
-            input_lengths = [len(self.tokenizer(f"{model_info['prefix']}{text}").input_ids) for text in
-                             examples['input_text']]
+            # Ensure we respect the model's maximum context length when calculating input lengths
+            input_lengths = [len(self.tokenizer(
+                f"{model_info['prefix']}{text}", 
+                truncation=True, 
+                max_length=min(512, model_max_length)
+            ).input_ids) for text in examples['input_text']]
             labels = []
             for i, length in enumerate(input_lengths):
                 label = [-100] * length  # Mask the input part
@@ -327,8 +348,20 @@ class BaseSummarizationPipeline:
             # Add prefix for encoder-decoder models
             prefixed_input = f"{model_info['prefix']}{input_text}"
 
+            # Get model's max context length or default to 2048 if not specified
+            model_max_length = getattr(self.tokenizer, 'model_max_length', 2048)
+
+            # Ensure we don't exceed the model's maximum context length
+            input_max_length = min(512, model_max_length)
+
             # Tokenize input
-            inputs = self.tokenizer(prefixed_input, return_tensors="pt", truncation=True, max_length=512)
+            inputs = self.tokenizer(
+                prefixed_input, 
+                return_tensors="pt", 
+                truncation=True, 
+                padding=True,
+                max_length=input_max_length
+            )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
             # Generate output
@@ -349,8 +382,20 @@ class BaseSummarizationPipeline:
             if 'suffix' in model_info:
                 formatted_input += f" {model_info['suffix']}"
 
+            # Get model's max context length or default to 2048 if not specified
+            model_max_length = getattr(self.tokenizer, 'model_max_length', 2048)
+
+            # Ensure we don't exceed the model's maximum context length
+            input_max_length = min(512, model_max_length)
+
             # Tokenize input
-            inputs = self.tokenizer(formatted_input, return_tensors="pt", truncation=True, max_length=512)
+            inputs = self.tokenizer(
+                formatted_input, 
+                return_tensors="pt", 
+                truncation=True, 
+                padding=True,
+                max_length=input_max_length
+            )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
             # Generate output

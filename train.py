@@ -128,7 +128,13 @@ class TrainingSummarization(BaseSummarizationPipeline):
             report_to=[],  # Disable other logging to prevent interference
         )
 
-        data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
+        # Configure data collator with padding and truncation
+        data_collator = DataCollatorWithPadding(
+            tokenizer=self.tokenizer,
+            padding=True,
+            max_length=getattr(self.tokenizer, 'model_max_length', 2048),
+            pad_to_multiple_of=8  # Optimize for GPU efficiency
+        )
 
         self.trainer = Trainer(
             model=self.model,
