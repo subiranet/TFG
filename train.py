@@ -82,44 +82,29 @@ class TrainingSummarization(BaseSummarizationPipeline):
         )
         return self.dataset
 
-
-    def prepare_datasets(self):
-        """Apply preprocessing and tokenization to datasets"""
-        logging.info("Preprocessing datasets...")
-        processed_dataset = self.dataset.map(
-            self.preprocess,
-            batched=True,
-            remove_columns=['abstract', 'text', 'paper_id', 'title', 'section_names', 'domain']
-        )
-
-        self.tokenized_dataset = processed_dataset.map(
-            self.tokenize_data,
-            batched=True
-        )
-
-        self.train_dataset = self.tokenized_dataset["train"].shuffle(seed=42)
-        self.eval_dataset = self.tokenized_dataset["test"].shuffle(seed=42)
-
-        return self.train_dataset, self.eval_dataset
-
     def train(self):
         """Train the model with configured parameters"""
         logging.info("Setting up training...")
         train_config = self.config['train']
 
-        batch_size = 16  # per_device_train_batch_size
-        gradient_accumulation_steps = 1
+        # Reduced batch sizes with gradient accumulation
+        batch_size = 8
+        gradient_accumulation_steps = 2
+        eval_batch_size = 2
+
         samples_per_epoch = self.config['data']['total'] * self.config['data']['train']
         steps_per_epoch = samples_per_epoch // (batch_size * gradient_accumulation_steps)
         max_steps = int(steps_per_epoch * train_config['epochs'])
 
         training_args = TrainingArguments(
             output_dir="./results",
-            eval_strategy="epoch",
-            save_strategy="epoch",
+            eval_strategy="steps",
+            eval_steps=steps_per_epoch // 3,
+            save_strategy="steps",
+            save_steps=steps_per_epoch // 3,
             learning_rate=train_config['LR'],
             per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=4,
+            per_device_eval_batch_size=eval_batch_size,
             num_train_epochs=train_config['epochs'],
             max_steps=max_steps,
             weight_decay=0.01,
@@ -129,16 +114,23 @@ class TrainingSummarization(BaseSummarizationPipeline):
             logging_dir="./logs",
             logging_steps=50,
             fp16=torch.cuda.is_available() and not train_config['cpu'],
-            report_to=[],  # Disable other logging to prevent interference
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            gradient_checkpointing=True,
+            optim="adamw_torch",
+            report_to=[],
         )
 
         # Configure data collator with padding and truncation
         data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer,
             padding='max_length',
-            max_length=512,  # Use a reasonable fixed value instead of model_max_length
-            pad_to_multiple_of=8  # Optimize for GPU efficiency
+            max_length=512,
+            pad_to_multiple_of=8
         )
+
+        # Enable model parallelism if needed
+        if hasattr(self.model, "parallelize"):
+            self.model.parallelize()
 
         self.trainer = Trainer(
             model=self.model,
@@ -153,15 +145,21 @@ class TrainingSummarization(BaseSummarizationPipeline):
             data_collator=data_collator,
         )
 
+        # Clear CUDA cache before training
+        torch.cuda.empty_cache()
+
         logging.info(f"Starting training for {max_steps} total steps...")
         try:
             training_results = self.trainer.train()
-            # Print newline after training completes
             print()
             logging.info("Training completed.")
         except KeyboardInterrupt:
-            # Print newline if training is interrupted
             print()
+            raise
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                logging.error("CUDA Out of Memory error occurred. Try further reducing batch sizes.")
+                raise RuntimeError("Consider reducing batch sizes further or using a smaller model.") from e
             raise
 
         return training_results
