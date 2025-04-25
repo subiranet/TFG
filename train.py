@@ -107,7 +107,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
         logging.info("Setting up training...")
         train_config = self.config['train']
 
-        batch_size = 4  # per_device_train_batch_size
+        batch_size = 1  # per_device_train_batch_size
         gradient_accumulation_steps = 1
         samples_per_epoch = self.config['data']['total'] * self.config['data']['train']
         steps_per_epoch = samples_per_epoch // (batch_size * gradient_accumulation_steps)
