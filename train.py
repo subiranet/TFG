@@ -82,6 +82,25 @@ class TrainingSummarization(BaseSummarizationPipeline):
         )
         return self.dataset
 
+    def prepare_datasets(self):
+        """Apply preprocessing and tokenization to datasets"""
+        logging.info("Preprocessing datasets...")
+        processed_dataset = self.dataset.map(
+            self.preprocess,
+            batched=True,
+            remove_columns=['abstract', 'text', 'paper_id', 'title', 'section_names', 'domain']
+        )
+
+        self.tokenized_dataset = processed_dataset.map(
+            self.tokenize_data,
+            batched=True
+        )
+
+        self.train_dataset = self.tokenized_dataset["train"].shuffle(seed=42)
+        self.eval_dataset = self.tokenized_dataset["test"].shuffle(seed=42)
+
+        return self.train_dataset, self.eval_dataset
+
     def train(self):
         """Train the model with configured parameters"""
         logging.info("Setting up training...")
