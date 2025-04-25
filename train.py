@@ -102,53 +102,47 @@ class TrainingSummarization(BaseSummarizationPipeline):
         return self.train_dataset, self.eval_dataset
 
     def train(self):
-        """Train the model with configured parameters"""
-        logging.info("Setting up training...")
+        """Training setup with proper cache/checkpointing handling"""
+        logging.info("Configuring training with memory optimizations...")
         train_config = self.config['train']
 
-        # Reduced batch sizes with gradient accumulation
-        batch_size = 2
-        gradient_accumulation_steps = 250
-        eval_batch_size = 1
+        # Memory-efficient settings
+        batch_size = 4
+        gradient_accumulation_steps = 125
+        eval_batch_size = 2
 
-        samples_needed = batch_size * gradient_accumulation_steps * 500
-        logging.info(f"Will process {samples_needed} total samples across 500 iterations")
+        # Configure model to disable cache when checkpointing is enabled
+        if hasattr(self.model.config, "use_cache"):
+            self.model.config.use_cache = False  # Critical for gradient checkpointing
 
         training_args = TrainingArguments(
             output_dir="./results",
-            eval_strategy="steps",
-            eval_steps=100,
+            eval_steps=250,
             save_strategy="steps",
-            save_steps=100,
+            save_steps=250,
             learning_rate=train_config['LR'],
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=eval_batch_size,
-            num_train_epochs=train_config['epochs'],
             max_steps=500,
             weight_decay=0.01,
-            load_best_model_at_end=True,
-            metric_for_best_model='eval-final_score',
-            greater_is_better=True,
-            logging_dir="./logs",
-            logging_steps=50,
-            fp16=torch.cuda.is_available() and not train_config['cpu'],
+            fp16=True,
             gradient_accumulation_steps=gradient_accumulation_steps,
-            gradient_checkpointing=True,
-            optim="adamw_torch",
+            gradient_checkpointing=True,  # This now works properly
+            optim="adamw_torch_fused",
             report_to=[],
+            eval_accumulation_steps=4,
+            dataloader_num_workers=4,
+            remove_unused_columns=True,
+            logging_steps=15,
         )
 
-        # Configure data collator with padding and truncation
+        # Data collator with balanced length
         data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer,
             padding='max_length',
-            max_length=512,
+            max_length=256,
             pad_to_multiple_of=8
         )
-
-        # Enable model parallelism if needed
-        if hasattr(self.model, "parallelize"):
-            self.model.parallelize()
 
         self.trainer = Trainer(
             model=self.model,
@@ -156,31 +150,12 @@ class TrainingSummarization(BaseSummarizationPipeline):
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics_model,
-            callbacks=[
-                EarlyStoppingCallback(early_stopping_patience=2),
-                MemoryMonitorCallback(log_interval=50)
-            ],
+            callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
             data_collator=data_collator,
         )
 
-        # Clear CUDA cache before training
-        torch.cuda.empty_cache()
-
-        logging.info(f"Starting training for {max_steps} total steps...")
-        try:
-            training_results = self.trainer.train()
-            print()
-            logging.info("Training completed.")
-        except KeyboardInterrupt:
-            print()
-            raise
-        except RuntimeError as e:
-            if "out of memory" in str(e).lower():
-                logging.error("CUDA Out of Memory error occurred. Try further reducing batch sizes.")
-                raise RuntimeError("Consider reducing batch sizes further or using a smaller model.") from e
-            raise
-
-        return training_results
+        logging.info("Starting training with proper cache configuration...")
+        return self.trainer.train()
 
     def save_model(self, output_dir='./Models'):
         if not hasattr(self, 'trainer'):
