@@ -107,25 +107,24 @@ class TrainingSummarization(BaseSummarizationPipeline):
         train_config = self.config['train']
 
         # Reduced batch sizes with gradient accumulation
-        batch_size = 8
-        gradient_accumulation_steps = 2
-        eval_batch_size = 2
+        batch_size = 2
+        gradient_accumulation_steps = 250
+        eval_batch_size = 1
 
-        samples_per_epoch = self.config['data']['total'] * self.config['data']['train']
-        steps_per_epoch = samples_per_epoch // (batch_size * gradient_accumulation_steps)
-        max_steps = int(steps_per_epoch * train_config['epochs'])
+        samples_needed = batch_size * gradient_accumulation_steps * 500
+        logging.info(f"Will process {samples_needed} total samples across 500 iterations")
 
         training_args = TrainingArguments(
             output_dir="./results",
             eval_strategy="steps",
-            eval_steps=steps_per_epoch // 3,
+            eval_steps=100,
             save_strategy="steps",
-            save_steps=steps_per_epoch // 3,
+            save_steps=100,
             learning_rate=train_config['LR'],
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=eval_batch_size,
             num_train_epochs=train_config['epochs'],
-            max_steps=max_steps,
+            max_steps=500,
             weight_decay=0.01,
             load_best_model_at_end=True,
             metric_for_best_model='eval-final_score',
