@@ -18,91 +18,88 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    try:
-        # Initialize
-        trainer = TrainingSummarization()
-        evaluator = EvaluationSummarizationPipeline()
-        tester = TestModel()
+    # Initialize
+    trainer = TrainingSummarization()
+    evaluator = EvaluationSummarizationPipeline()
+    tester = TestModel()
 
-        # Load data
-        trainer.load_data()
+    # Load data
+    trainer.load_data()
 
-        # Initialize model components
-        trainer.initialize_model()
+    # Initialize model components
+    trainer.initialize_model()
 
-        # Prepare datasets
-        trainer.prepare_datasets()
+    # Prepare datasets
+    trainer.prepare_datasets()
 
-        # Train
-        t_results = trainer.train()
+    # Train
+    t_results = trainer.train()
 
-        # Save model
-        # trainer.save_model()
+    # Save model
+    # trainer.save_model()
 
-        # Configure evaluator
-        # evaluator.model = trainer.model
-        # eval.info("Loading data...")
-        tester.load_data()
+    # Configure evaluator
+    # evaluator.model = trainer.model
+    # eval.info("Loading data...")
+    tester.load_data()
 
-        logger.info("Loading model...")
-        tester.model = trainer.model
+    logger.info("Loading model...")
+    tester.model = trainer.model
 
-        logger.info("Preparing dataset...")
-        tester.prepare_dataset()
+    logger.info("Preparing dataset...")
+    tester.prepare_dataset()
 
-        logger.info("Generating summaries...")
-        summ = tester.generate_summaries()
+    logger.info("Generating summaries...")
+    summ = tester.generate_summaries()
 
-        logger.info("Evaluating test...")
-        tester.evaluate_test()
+    logger.info("Evaluating test...")
+    tester.evaluate_test()
 
-        logger.info("Saving results...")
-        tester.save_results()  # Save both evaluation results and dataset
+    logger.info("Saving results...")
+    tester.save_results()  # Save both evaluation results and dataset
 
-        logger.info("Testing completed successfully!")
+    logger.info("Testing completed successfully!")
 
-        # Evaluate model
-        # e_results = evaluator.evaluate()
-        #
-        # logger.info(f'\nTraining results for model {trainer.config['model']['name']}:')
-        # logger.info(t_results)
-        #
-        # logger.info(f'\nTraining results for model {evaluator.config['model']['name']}:')
-        # logger.info(e_results)uator.dataset = trainer.dataset['test']
+    # Evaluate model
+    # e_results = evaluator.evaluate()
+    #
+    # logger.info(f'\nTraining results for model {trainer.config['model']['name']}:')
+    # logger.info(t_results)
+    #
+    # logger.info(f'\nTraining results for model {evaluator.config['model']['name']}:')
+    # logger.info(e_results)uator.dataset = trainer.dataset['test']
 
-        # Test results
-        logger.info("Loading data...")
-        tester.load_data()
+    # Test results
+    logger.info("Loading data...")
+    tester.load_data()
 
-        logger.info("Loading model...")
-        tester.model = trainer.model
+    logger.info("Loading model...")
+    tester.model = trainer.model
 
-        logger.info("Preparing dataset...")
-        tester.prepare_dataset()
+    logger.info("Preparing dataset...")
+    tester.prepare_dataset()
 
-        logger.info("Generating summaries...")
-        summ = tester.generate_summaries()
+    logger.info("Generating summaries...")
+    summ = tester.generate_summaries()
 
-        logger.info("Evaluating test...")
-        tester.evaluate_test()
+    logger.info("Evaluating test...")
+    tester.evaluate_test()
 
-        logger.info("Saving results...")
-        tester.save_results()  # Save both evaluation results and dataset
+    logger.info("Saving results...")
+    tester.save_results()  # Save both evaluation results and dataset
 
-        logger.info("Testing completed successfully!")
+    logger.info("Testing completed successfully!")
 
-        # Evaluate model
-        # e_results = evaluator.evaluate()
-        #
-        # logger.info(f'\nTraining results for model {trainer.config['model']['name']}:')
-        # logger.info(t_results)
-        #
-        # logger.info(f'\nTraining results for model {evaluator.config['model']['name']}:')
-        # logger.info(e_results)
+    # Evaluate model
+    # e_results = evaluator.evaluate()
+    #
+    # logger.info(f'\nTraining results for model {trainer.config['model']['name']}:')
+    # logger.info(t_results)
+    #
+    # logger.info(f'\nTraining results for model {evaluator.config['model']['name']}:')
+    # logger.info(e_results)
 
 
-    except Exception as e:
-       logger.error(f"Py runner execution failed: {str(e)}")
 
 
 if __name__ == "__main__":
