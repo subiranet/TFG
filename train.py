@@ -44,9 +44,13 @@ class MemoryMonitorCallback(TrainerCallback):
                 gpu_mem += f" | GPU {i} - Used: {humanize.naturalsize(mem)} Free: {humanize.naturalsize(free)}"
 
         # Get training progress info
+        loss_value = "N/A"
+        if state.log_history and len(state.log_history) > 0:
+            loss_value = f"{state.log_history[-1].get('loss', 'N/A'):.4f}"
+
         progress = (f"Step {state.global_step}/{state.max_steps} "
                     f"({state.global_step / state.max_steps:.1%}) | "
-                    f"Loss: {state.log_history[-1].get('loss', 'N/A'):.4f}")
+                    f"Loss: {loss_value}")
 
         # Combine all info
         message = f"{progress} | {cpu_mem}{gpu_mem}"

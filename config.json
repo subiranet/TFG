@@ -1,6 +1,6 @@
 {
 	"model": {
-		"name": "bart",
+		"name": "t5",
 		"trained": false
 	},
 	"data": {
