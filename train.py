@@ -16,6 +16,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class ClearMemoryCallback(TrainerCallback):
+    def on_step_end(self, args, state, control, **kwargs):
+        torch.cuda.empty_cache()  # Clears unused GPU memory
 
 class MemoryMonitorCallback(TrainerCallback):
     def __init__(self, log_interval=50):
@@ -108,41 +111,30 @@ class TrainingSummarization(BaseSummarizationPipeline):
 
         # Reduced batch sizes with gradient accumulation
         batch_size = 4
-        gradient_accumulation_steps = 125
-        eval_batch_size = 2
-
-        if hasattr(self.model.config, "use_cache"):
-            self.model.config.use_cache = False
-
-        samples_needed = batch_size * gradient_accumulation_steps * 500
-        logging.info(f"Will process {samples_needed} total samples across 500 iterations")
+        gradient_accumulation_steps = 8
+        samples_per_epoch = 100 * self.config['data']['train']
+        steps_per_epoch = samples_per_epoch // (batch_size * gradient_accumulation_steps)
+        max_steps = int(steps_per_epoch * train_config['epochs'])
 
         training_args = TrainingArguments(
             output_dir="./results",
-            eval_strategy="steps",
-            eval_steps=250,
-            save_strategy="steps",
-            save_steps=250,
+            eval_strategy="epoch",
+            save_strategy="epoch",
             learning_rate=train_config['LR'],
             per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=eval_batch_size,
-            max_steps=500,
+            per_device_eval_batch_size=4,
+            num_train_epochs=train_config['epochs'],
+            max_steps=max_steps,
             weight_decay=0.01,
             load_best_model_at_end=True,
             metric_for_best_model='eval-final_score',
             greater_is_better=True,
             logging_dir="./logs",
-            logging_steps=50,
+            logging_steps=10,
             fp16=torch.cuda.is_available() and not train_config['cpu'],
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            gradient_checkpointing=True,
-            optim="adamw_torch",
-            report_to=[],
-            eval_accumulation_steps=4,
-            dataloader_num_workers=4,
-            remove_unused_columns=True,
+            report_to=[],  # Disable other logging to prevent interference
+            remove_unused_columns=True,  # Reduces memory usage
         )
-
         # Configure data collator with padding and truncation
         data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer,
@@ -163,7 +155,8 @@ class TrainingSummarization(BaseSummarizationPipeline):
             compute_metrics=self.compute_metrics_model,
             callbacks=[
                 EarlyStoppingCallback(early_stopping_patience=2),
-                MemoryMonitorCallback(log_interval=50)
+                MemoryMonitorCallback(log_interval=10),
+                ClearMemoryCallback()
             ],
             data_collator=data_collator,
         )
