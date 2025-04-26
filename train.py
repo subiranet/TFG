@@ -132,6 +132,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             logging_dir="./logs",
             logging_steps=10,
             fp16=torch.cuda.is_available() and not train_config['cpu'],
+            tf32=torch.cuda.is_available() and not train_config['cpu'],
             report_to=[],  # Disable other logging to prevent interference
             remove_unused_columns=True,  # Reduces memory usage
         )

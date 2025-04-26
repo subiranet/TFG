@@ -133,7 +133,7 @@ class BaseSummarizationPipeline:
             model_max_length = getattr(self.tokenizer, 'model_max_length', 2048)
 
             # Ensure we don't exceed the model's maximum context length
-            input_max_length = min(512, model_max_length)
+            input_max_length = min(1024, model_max_length)
             target_max_length = min(150, model_max_length)
 
             model_inputs = self.tokenizer(
