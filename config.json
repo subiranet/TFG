@@ -4,7 +4,7 @@
 		"trained": false
 	},
 	"data": {
-		"total": 50000,
+		"total": 17000,
 		"train": 0.8,
 		"test": 0.18,
 		"eval": 0.02
@@ -17,7 +17,7 @@
 	"eval": {
 		"random": false,
 		"size": 10,
-		"ids": []
+		"ids": [118348252, 119303848, 118657113, 118533676, 767478, 53113716, 15946226, 184488038, 67856693, 9202348]
 	},
 	"model_opt": ["bart", "pegasus", "t5", "tinyLlama", "arxiv", "scibert"]
 }
