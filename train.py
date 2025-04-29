@@ -118,7 +118,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
         train_config = self.config['train']
 
 
-        batch_size = 4  # per_device_train_batch_size
+        batch_size = 2  # per_device_train_batch_size
         desired_effective_batch_size = 1000
         gradient_accumulation_steps = desired_effective_batch_size // batch_size
         
@@ -128,8 +128,10 @@ class TrainingSummarization(BaseSummarizationPipeline):
 
         training_args = TrainingArguments(
             output_dir="./results",
-            eval_strategy="epoch",
-            save_strategy="epoch",
+            eval_strategy="steps",
+            save_strategy="steps",
+            eval_steps=1000,
+            save_steps=1000,
             learning_rate=train_config['LR'],
             per_device_train_batch_size=4,
             per_device_eval_batch_size=4,
@@ -138,6 +140,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             weight_decay=0.01,
             load_best_model_at_end=True,
             metric_for_best_model='eval-final_score',
+            gradient_checkpointing=True,
             greater_is_better=True,
             logging_dir="./logs",
             logging_steps=50,

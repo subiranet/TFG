@@ -325,113 +325,53 @@ class BaseSummarizationPipeline:
             logging.error(f'Error loading local model {model_dir}:\n{e}')
 
     def generate_output(self, input_text, max_length=150, num_beams=4, temperature=1.0, top_k=50, top_p=0.95):
-        """
-        Generate output from a model for the given input text.
+        if not self.model or not self.tokenizer:
+            raise RuntimeError("Model and tokenizer not initialized")
 
-        Args:
-            input_text (str): The input text to generate a response for
-            max_length (int, optional): Maximum length of the generated text. Defaults to 150.
-            num_beams (int, optional): Number of beams for beam search. Defaults to 4.
-            temperature (float, optional): Temperature for sampling. Defaults to 1.0.
-            top_k (int, optional): Top-k sampling parameter. Defaults to 50.
-            top_p (float, optional): Top-p sampling parameter. Defaults to 0.95.
-
-        Returns:
-            str: The generated text
-        """
-        if self.model is None or self.tokenizer is None:
-            raise ValueError("Model and tokenizer must be initialized before generating output")
-
-        # Get model info
-        model_name = self.config['model']['name']
-        model_info = self.MODEL_MAP[model_name]
-        model_type = model_info['type']
-
-        # Move model to the correct device
+        model_specs = self.MODEL_MAP[self.config['model']['name']]
         self.model.to(self.device)
 
-        # Prepare input based on model type
-        if model_type == 'encoder_decoder':
-            # Add prefix for encoder-decoder models
-            prefixed_input = f"{model_info['prefix']}{input_text}"
+        if model_specs['type'] == 'encoder_decoder':
+            processed_input = f"{model_specs['prefix']}{input_text}"
+            max_context = getattr(self.tokenizer, 'model_max_length', 2048)
 
-            # Get model's max context length or default to 2048 if not specified
-            model_max_length = getattr(self.tokenizer, 'model_max_length', 2048)
-
-            # Ensure we don't exceed the model's maximum context length
-            input_max_length = min(512, model_max_length)
-
-            # Tokenize input
             inputs = self.tokenizer(
-                prefixed_input, 
-                return_tensors="pt", 
-                truncation=True, 
-                padding='max_length',
-                max_length=input_max_length
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-            # Generate output
-            # Ensure max_length doesn't exceed model's maximum context length
-            output_max_length = min(max_length, model_max_length)
+                processed_input,
+                return_tensors="pt",
+                truncation=True,
+                max_length=min(512, max_context)
+            ).to(self.device)
 
             outputs = self.model.generate(
                 **inputs,
-                max_length=output_max_length,
+                max_length=min(max_length, max_context),
                 num_beams=num_beams,
                 temperature=temperature,
                 top_k=top_k,
                 top_p=top_p,
-                no_repeat_ngram_size=3,
-                early_stopping=True
-            )
-
-        else:  # causal model
-            # Format input with prefix and suffix if available
-            formatted_input = f"{model_info['prefix']}{input_text}"
-            if 'suffix' in model_info:
-                formatted_input += f" {model_info['suffix']}"
-
-            # Get model's max context length or default to 2048 if not specified
-            model_max_length = getattr(self.tokenizer, 'model_max_length', 2048)
-
-            # Ensure we don't exceed the model's maximum context length
-            input_max_length = min(512, model_max_length)
-
-            # Tokenize input
-            inputs = self.tokenizer(
-                formatted_input, 
-                return_tensors="pt", 
-                truncation=True, 
-                padding='max_length',
-                max_length=input_max_length
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-            # Generate output
-            # Calculate input length
-            input_length = inputs['input_ids'].shape[1]
-
-            # Ensure the sum of input_length and max_length doesn't exceed model's maximum context length
-            output_max_length = min(input_length + max_length, model_max_length)
-
-            outputs = self.model.generate(
-                **inputs,
-                max_length=output_max_length,  # Ensure we don't exceed model's maximum context length
-                num_beams=num_beams,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=self.tokenizer.eos_token_id,
                 no_repeat_ngram_size=3
             )
+        else:
+            processed_input = f"{model_specs['prefix']}{input_text}"
+            if 'suffix' in model_specs:
+                processed_input += f" {model_specs['suffix']}"
 
-            # For causal models, we need to remove the input tokens from the output
+            max_context = getattr(self.tokenizer, 'model_max_length', 2048)
+            inputs = self.tokenizer(
+                processed_input,
+                return_tensors="pt",
+                truncation=True,
+                max_length=min(512, max_context)
+            ).to(self.device)
+
             input_length = inputs['input_ids'].shape[1]
-            outputs = outputs[:, input_length:]
+            outputs = self.model.generate(
+                **inputs,
+                max_length=min(input_length + max_length, max_context),
+                num_beams=num_beams,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p
+            )[:, input_length:]
 
-        # Decode the generated output
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        return generated_text
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
