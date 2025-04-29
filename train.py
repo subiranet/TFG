@@ -144,15 +144,6 @@ class TrainingSummarization(BaseSummarizationPipeline):
         if hasattr(self.model, "parallelize"):
             self.model.parallelize()
 
-        # Explicitly create optimizer with correct parameters
-        from transformers import AdamW
-        optimizer = AdamW(
-            self.model.parameters(),
-            lr=training_args.learning_rate,
-            weight_decay=training_args.weight_decay,
-            eps=1e-8,
-            betas=(0.9, 0.999)
-        )
 
         self.trainer = Trainer(
             model=self.model,
@@ -165,8 +156,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
                 MemoryMonitorCallback(log_interval=10),
                 ClearMemoryCallback()
             ],
-            data_collator=data_collator,
-            optimizers=(optimizer, None)  # (optimizer, scheduler)
+            data_collator=data_collator
         )
 
         # Clear CUDA cache before training

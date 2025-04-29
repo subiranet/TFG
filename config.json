@@ -1,10 +1,10 @@
 {
 	"model": {
-		"name": "t5",
+		"name": "bart",
 		"trained": false
 	},
 	"data": {
-		"total": 17000,
+		"total": 10000,
 		"train": 0.8,
 		"test": 0.18,
 		"eval": 0.02
