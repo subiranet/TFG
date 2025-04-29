@@ -110,13 +110,18 @@ class TrainingSummarization(BaseSummarizationPipeline):
         return self.train_dataset, self.eval_dataset
 
     def train(self):
+        # Add at the start of your script
+        import os
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
         """Train the model with configured parameters"""
         logger.info("Setting up training...")
         train_config = self.config['train']
 
 
         batch_size = 4  # per_device_train_batch_size
-        gradient_accumulation_steps = 1
+        desired_effective_batch_size = 1000
+        gradient_accumulation_steps = desired_effective_batch_size // batch_size
+        
         samples_per_epoch = self.config['data']['total'] * self.config['data']['train']
         steps_per_epoch = samples_per_epoch // (batch_size * gradient_accumulation_steps)
         max_steps = int(steps_per_epoch * train_config['epochs'])
@@ -126,7 +131,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             eval_strategy="epoch",
             save_strategy="epoch",
             learning_rate=train_config['LR'],
-            per_device_train_batch_size=batch_size,
+            per_device_train_batch_size=4,
             per_device_eval_batch_size=4,
             num_train_epochs=train_config['epochs'],
             max_steps=max_steps,
@@ -135,7 +140,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             metric_for_best_model='eval-final_score',
             greater_is_better=True,
             logging_dir="./logs",
-            logging_steps=10,
+            logging_steps=50,
             fp16=torch.cuda.is_available() and not train_config['cpu'],
             report_to=[],  # Disable other logging to prevent interference
             gradient_accumulation_steps=gradient_accumulation_steps,
@@ -156,7 +161,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             compute_metrics=self.compute_metrics_model,
             callbacks=[
                 EarlyStoppingCallback(early_stopping_patience=2),
-                MemoryMonitorCallback(log_interval=10),
+                MemoryMonitorCallback(log_interval=50),
                 ClearMemoryCallback()
             ],
             data_collator=data_collator
