@@ -118,7 +118,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
         train_config = self.config['train']
 
 
-        batch_size = 2  # per_device_train_batch_size
+        batch_size = 4  # per_device_train_batch_size
         desired_effective_batch_size = 1000
         gradient_accumulation_steps = desired_effective_batch_size // batch_size
         
