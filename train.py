@@ -143,7 +143,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             gradient_checkpointing=True,
             greater_is_better=True,
             logging_dir="./logs",
-            logging_steps=50,
+            logging_steps=5,
             fp16=torch.cuda.is_available() and not train_config['cpu'],
             report_to=[],  # Disable other logging to prevent interference
             gradient_accumulation_steps=gradient_accumulation_steps,
@@ -164,7 +164,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             compute_metrics=self.compute_metrics_model,
             callbacks=[
                 EarlyStoppingCallback(early_stopping_patience=2),
-                MemoryMonitorCallback(log_interval=50),
+                MemoryMonitorCallback(log_interval=5),
                 ClearMemoryCallback()
             ],
             data_collator=data_collator
