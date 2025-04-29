@@ -152,7 +152,10 @@ class BaseSummarizationPipeline:
                 return_tensors='pt'
             )
 
-            model_inputs["labels"] = labels["input_ids"]
+            # Replace padding token id with -100 in labels to ignore loss on padding tokens
+            labels_tensor = labels["input_ids"].clone()
+            labels_tensor[labels_tensor == self.tokenizer.pad_token_id] = -100
+            model_inputs["labels"] = labels_tensor
 
         else:
             # Causal models (Mistral and variants)
@@ -279,6 +282,10 @@ class BaseSummarizationPipeline:
 
         self.tokenizer = model_info['tokenizer'].from_pretrained(model_info['base_name'])
         self.model = model_info['model'].from_pretrained(model_info['base_name']).to(self.device)
+
+        # Ensure all parameters are trainable
+        for param in self.model.parameters():
+            param.requires_grad = True
 
         # Set padding token if not already set (for Mistral models)
         if model_info['type'] == 'causal' and self.tokenizer.pad_token is None:

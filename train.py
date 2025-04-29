@@ -135,6 +135,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
             logging_steps=10,
             fp16=torch.cuda.is_available() and not train_config['cpu'],
             report_to=[],  # Disable other logging to prevent interference
+            gradient_accumulation_steps=gradient_accumulation_steps,
         )
 
         data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
@@ -142,6 +143,16 @@ class TrainingSummarization(BaseSummarizationPipeline):
         # Enable model parallelism if needed
         if hasattr(self.model, "parallelize"):
             self.model.parallelize()
+
+        # Explicitly create optimizer with correct parameters
+        from transformers import AdamW
+        optimizer = AdamW(
+            self.model.parameters(),
+            lr=training_args.learning_rate,
+            weight_decay=training_args.weight_decay,
+            eps=1e-8,
+            betas=(0.9, 0.999)
+        )
 
         self.trainer = Trainer(
             model=self.model,
@@ -155,10 +166,37 @@ class TrainingSummarization(BaseSummarizationPipeline):
                 ClearMemoryCallback()
             ],
             data_collator=data_collator,
+            optimizers=(optimizer, None)  # (optimizer, scheduler)
         )
 
         # Clear CUDA cache before training
         torch.cuda.empty_cache()
+
+        # Add a custom callback to monitor gradients
+        class GradientMonitorCallback(TrainerCallback):
+            def on_step_end(self, args, state, control, model=None, **kwargs):
+                if state.global_step % 10 == 0:  # Check every 10 steps
+                    # Check if gradients are being computed
+                    has_gradients = False
+                    max_grad = 0.0
+                    for name, param in model.named_parameters():
+                        if param.requires_grad and param.grad is not None:
+                            grad_norm = param.grad.norm().item()
+                            if grad_norm > 0:
+                                has_gradients = True
+                                max_grad = max(max_grad, grad_norm)
+
+                    logging.info(f"Step {state.global_step}: Has gradients: {has_gradients}, Max gradient: {max_grad}")
+
+        # Add the gradient monitor callback
+        self.trainer.add_callback(GradientMonitorCallback())
+
+        # Ensure model is in training mode
+        self.model.train()
+
+        # Log model trainable parameters
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        logging.info(f"Model has {trainable_params:,} trainable parameters")
 
         logging.info(f"Starting training for {500} total steps...")
         try:
