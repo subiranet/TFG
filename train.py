@@ -111,10 +111,10 @@ class TrainingSummarization(BaseSummarizationPipeline):
         logging.info("Setting up training...")
         train_config = self.config['train']
 
-        # Reduced batch sizes with gradient accumulation
-        batch_size = 4
-        gradient_accumulation_steps = 8
-        samples_per_epoch = 100 * self.config['data']['train']
+
+        batch_size = 4  # per_device_train_batch_size
+        gradient_accumulation_steps = 1
+        samples_per_epoch = self.config['data']['total'] * self.config['data']['train']
         steps_per_epoch = samples_per_epoch // (batch_size * gradient_accumulation_steps)
         max_steps = int(steps_per_epoch * train_config['epochs'])
 
@@ -134,17 +134,10 @@ class TrainingSummarization(BaseSummarizationPipeline):
             logging_dir="./logs",
             logging_steps=10,
             fp16=torch.cuda.is_available() and not train_config['cpu'],
-            tf32=torch.cuda.is_available() and not train_config['cpu'],
             report_to=[],  # Disable other logging to prevent interference
-            remove_unused_columns=True,  # Reduces memory usage
         )
-        # Configure data collator with padding and truncation
-        data_collator = DataCollatorWithPadding(
-            tokenizer=self.tokenizer,
-            padding='max_length',
-            max_length=512,
-            pad_to_multiple_of=8
-        )
+
+        data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
 
         # Enable model parallelism if needed
         if hasattr(self.model, "parallelize"):
