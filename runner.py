@@ -48,6 +48,7 @@ def main():
 
     logger.info("Loading model...")
     tester.model = trainer.model
+    tester.tokenizer = trainer.tokenizer
 
     logger.info("Preparing dataset...")
     tester.prepare_dataset()
@@ -78,6 +79,7 @@ def main():
 
     logger.info("Loading model...")
     tester.model = trainer.model
+    tester.tokenizer = trainer.tokenizer
 
     logger.info("Preparing dataset...")
     tester.prepare_dataset()

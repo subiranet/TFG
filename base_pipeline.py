@@ -103,12 +103,13 @@ class BaseSummarizationPipeline:
         """Merge document sections with their titles"""
         return '\n\n'.join([f'{title}: {"".join(content)}' for title, content in zip(section_names, text)])
 
-    def preprocess(self, examples):
+    @staticmethod
+    def preprocess(examples):
         """Process individual examples before tokenization"""
         processed = {'input_text': [], 'target_text': []}
 
         for i in range(len(examples['title'])):
-            merged_text = self.merge_sections(examples['text'][i], examples['section_names'][i])
+            merged_text = BaseSummarizationPipeline.merge_sections(examples['text'][i], examples['section_names'][i])
             input_text = (
                 f"Title: {examples['title'][i]}\n"
                 f"Domains: {', '.join(examples['domain'][i])}\n\n"
