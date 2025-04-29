@@ -25,17 +25,20 @@ class ClearMemoryCallback(TrainerCallback):
 class MemoryMonitorCallback(TrainerCallback):
     def __init__(self, log_interval=50):
         self.log_interval = log_interval
-        self.last_message_length = 0
+        self.last_epoch = -1
 
     def on_step_end(self, args, state, control, **kwargs):
         if state.global_step % self.log_interval == 0:
             self._log_memory(state)
 
-    def _log_memory(self, state):
-        # Clear previous message
-        sys.stdout.write('\r' + ' ' * self.last_message_length + '\r')
-        sys.stdout.flush()
+    def on_epoch_end(self, args, state, control, **kwargs):
+        # Calculate current epoch (may be fractional)
+        current_epoch = state.epoch
+        if current_epoch > self.last_epoch:
+            self.last_epoch = current_epoch
+            logger.info(f"Completed epoch {int(current_epoch)}/{args.num_train_epochs} ({current_epoch/args.num_train_epochs:.1%})")
 
+    def _log_memory(self, state):
         # Get memory info
         mem = psutil.virtual_memory()
         cpu_mem = f"CPU Memory - Used: {humanize.naturalsize(mem.used)} | Free: {humanize.naturalsize(mem.available)}"
@@ -53,17 +56,17 @@ class MemoryMonitorCallback(TrainerCallback):
         if state.log_history and len(state.log_history) > 0:
             loss_value = f"{state.log_history[-1].get('loss', 'N/A'):.4f}"
 
-        progress = (f"Step {state.global_step}/{state.max_steps} "
-                    f"({state.global_step / state.max_steps:.1%}) | "
-                    f"Loss: {loss_value}")
+        # Calculate current epoch (may be fractional)
+        current_epoch = state.epoch
 
         # Combine all info
-        message = f"{progress} | {cpu_mem}{gpu_mem}"
+        progress = (f"Step {state.global_step}/{state.max_steps} "
+                   f"({state.global_step / state.max_steps:.1%}) | "
+                   f"Epoch {current_epoch:.2f}/{state.num_train_epochs} | "
+                   f"Loss: {loss_value}")
 
-        # Print the message and store its length for next clear
-        sys.stdout.write(message)
-        sys.stdout.flush()
-        self.last_message_length = len(message)
+        # Log the message using the logger
+        logger.info(f"{progress} | {cpu_mem}{gpu_mem}")
 
 
 class TrainingSummarization(BaseSummarizationPipeline):
@@ -79,7 +82,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
         train_path = os.path.join(data_dir, "train.json")
         test_path = os.path.join(data_dir, "test.json")
 
-        logging.info(f"Loading dataset from {data_dir}...")
+        logger.info(f"Loading dataset from {data_dir}...")
         self.dataset = load_dataset(
             'json',
             data_files={'train': train_path, 'test': test_path},
@@ -89,7 +92,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
 
     def prepare_datasets(self):
         """Apply preprocessing and tokenization to datasets"""
-        logging.info("Preprocessing datasets...")
+        logger.info("Preprocessing datasets...")
         processed_dataset = self.dataset.map(
             self.preprocess,
             batched=True,
@@ -108,7 +111,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
 
     def train(self):
         """Train the model with configured parameters"""
-        logging.info("Setting up training...")
+        logger.info("Setting up training...")
         train_config = self.config['train']
 
 
@@ -164,8 +167,11 @@ class TrainingSummarization(BaseSummarizationPipeline):
 
         # Add a custom callback to monitor gradients
         class GradientMonitorCallback(TrainerCallback):
+            def __init__(self, log_interval=10):
+                self.log_interval = log_interval
+
             def on_step_end(self, args, state, control, model=None, **kwargs):
-                if state.global_step % 10 == 0:  # Check every 10 steps
+                if state.global_step % self.log_interval == 0:  # Check every N steps
                     # Check if gradients are being computed
                     has_gradients = False
                     max_grad = 0.0
@@ -176,29 +182,28 @@ class TrainingSummarization(BaseSummarizationPipeline):
                                 has_gradients = True
                                 max_grad = max(max_grad, grad_norm)
 
-                    logging.info(f"Step {state.global_step}: Has gradients: {has_gradients}, Max gradient: {max_grad}")
+                    logger.info(f"Gradient info - Step {state.global_step}: Has gradients: {has_gradients}, Max gradient: {max_grad:.6f}")
 
         # Add the gradient monitor callback
-        self.trainer.add_callback(GradientMonitorCallback())
+        self.trainer.add_callback(GradientMonitorCallback(log_interval=20))
 
         # Ensure model is in training mode
         self.model.train()
 
         # Log model trainable parameters
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        logging.info(f"Model has {trainable_params:,} trainable parameters")
+        logger.info(f"Model has {trainable_params:,} trainable parameters")
 
-        logging.info(f"Starting training for {500} total steps...")
+        logger.info(f"Starting training for {max_steps} total steps...")
         try:
             training_results = self.trainer.train()
-            print()
-            logging.info("Training completed.")
+            logger.info("Training completed.")
         except KeyboardInterrupt:
-            print()
+            logger.warning("Training interrupted by user.")
             raise
         except RuntimeError as e:
             if "out of memory" in str(e).lower():
-                logging.error("CUDA Out of Memory error occurred. Try further reducing batch sizes.")
+                logger.error("CUDA Out of Memory error occurred. Try further reducing batch sizes.")
                 raise RuntimeError("Consider reducing batch sizes further or using a smaller model.") from e
             raise
 
@@ -211,10 +216,10 @@ class TrainingSummarization(BaseSummarizationPipeline):
         output_dir = f'{output_dir}/{self.config['model']['name']}-{self.dir_name}'
         os.mkdir(output_dir)
 
-        logging.info(f"Saving model to {output_dir}")
+        logger.info(f"Saving model to {output_dir}")
         self.trainer.save_model(output_dir)
         self.tokenizer.save_pretrained(output_dir)
-        logging.info("Model saved successfully")
+        logger.info("Model saved successfully")
 
 
 def main():
