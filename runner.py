@@ -9,6 +9,9 @@ from train import TrainingSummarization
 from evaluate import EvaluationSummarizationPipeline
 from tester import TestModel
 
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',

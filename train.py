@@ -16,9 +16,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 class ClearMemoryCallback(TrainerCallback):
     def on_step_end(self, args, state, control, **kwargs):
         torch.cuda.empty_cache()  # Clears unused GPU memory
+
 
 class MemoryMonitorCallback(TrainerCallback):
     def __init__(self, log_interval=50):
