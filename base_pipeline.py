@@ -37,10 +37,10 @@ class BaseSummarizationPipeline:
             'prefix': '',
             'type': 'encoder_decoder'
         },
-        't5': {
+        'book': {
             'tokenizer': AutoTokenizer,
             'model': AutoModelForSeq2SeqLM,
-            'base_name': 'pszemraj/long-t5-tglobal-xl-16384-book-summary',
+            'base_name': 'pszemraj/led-large-book-summary',
             'prefix': 'Summarize the following scientific article and create the abstract.\n\n',
             'type': 'encoder_decoder'
         },
