@@ -282,7 +282,7 @@ class BaseSummarizationPipeline:
         logging.info(f"Initializing {model_name} model with base {model_info['base_name']}...")
 
         self.tokenizer = model_info['tokenizer'].from_pretrained(model_info['base_name'])
-        self.model = model_info['model'].from_pretrained(model_info['base_name']).to(self.device)
+        self.model = model_info['model'].from_pretrained(model_info['base_name']).to_empty(device=self.device)
 
         # Ensure all parameters are trainable
         for param in self.model.parameters():
@@ -321,7 +321,7 @@ class BaseSummarizationPipeline:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.model.config.pad_token_id = self.model.config.eos_token_id
 
-            self.model.to(self.device)
+            self.model.to_empty(device=self.device)
         except Exception as e:
             logging.error(f'Error loading local model {model_dir}:\n{e}')
 
@@ -330,7 +330,7 @@ class BaseSummarizationPipeline:
             raise RuntimeError("Model and tokenizer not initialized")
 
         model_specs = self.MODEL_MAP[self.config['model']['name']]
-        self.model.to(self.device)
+        self.model.to_empty(device=self.device)
 
         if model_specs['type'] == 'encoder_decoder':
             processed_input = f"{model_specs['prefix']}{input_text}"
