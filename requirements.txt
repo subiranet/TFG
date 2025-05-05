@@ -1,5 +1,5 @@
 absl-py==2.2.2
-accelerate==1.6.0
+accelerate==0.20.3
 aiohappyeyeballs==2.6.1
 aiohttp==3.11.16
 aiosignal==1.3.2
@@ -62,7 +62,7 @@ sympy==1.13.1
 tokenizers==0.21.1
 torch==2.6.0
 tqdm==4.67.1
-transformers==4.51.3
+transformers==4.31.0
 triton==3.2.0
 typing_extensions==4.13.2
 tzdata==2025.2

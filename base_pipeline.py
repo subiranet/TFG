@@ -40,8 +40,8 @@ class BaseSummarizationPipeline:
         't5': {
             'tokenizer': AutoTokenizer,
             'model': AutoModelForSeq2SeqLM,
-            'base_name': 'pszemraj/long-t5-tglobal-base-16384-book-summary',
-            'prefix': 'summarize: ',
+            'base_name': 'pszemraj/long-t5-tglobal-xl-16384-book-summary',
+            'prefix': 'Summarize the following scientific article and create the abstract.\n\n',
             'type': 'encoder_decoder'
         },
         'tinyLlama': {
@@ -228,7 +228,7 @@ class BaseSummarizationPipeline:
 
         pred_lengths = [len(pred.split()) for pred in decoded_preds]
         label_lengths = [len(label.split()) for label in decoded_labels]
-        length_ratio = np.mean([p / l if l != 0 else 0 for p, l in zip(pred_lengths, label_lengths)])
+        length_ratio = np.mean([p / l if l != 0 else float('inf') for p, l in zip(pred_lengths, label_lengths)])
         length_penalty = min(1.0, length_ratio ** self.length_penalty_alpha)
 
         if bleu_score + rougeL_f1 > 0:
