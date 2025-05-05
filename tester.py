@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import numpy as np
+from attr.validators import min_len
 
 from datasets import load_dataset
 
@@ -121,7 +122,8 @@ class TestModel(EvaluationSummarizationPipeline):
             # Use the generate_output function
             output = self.generate_output(
                 input_text=input_text,
-                max_length=150,  # Reduced from 5000 to avoid integer overflow
+                min_length=100,
+                max_length=300,  # Reduced from 5000 to avoid integer overflow
                 num_beams=4,
                 temperature=1.0
             )

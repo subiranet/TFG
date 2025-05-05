@@ -1,6 +1,6 @@
 {
 	"model": {
-		"name": "bart",
+		"name": "book",
 		"trained": false
 	},
 	"data": {
@@ -19,5 +19,5 @@
 		"size": 10,
 		"ids": [118348252, 119303848, 118657113, 118533676, 767478, 53113716, 15946226, 184488038, 67856693, 9202348]
 	},
-	"model_opt": ["bart", "pegasus", "t5", "tinyLlama", "arxiv", "scibert"]
+	"model_opt": ["bart", "pegasus", "book", "tinyLlama", "arxiv", "scibert"]
 }

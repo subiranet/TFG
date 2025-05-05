@@ -325,7 +325,7 @@ class BaseSummarizationPipeline:
         except Exception as e:
             logging.error(f'Error loading local model {model_dir}:\n{e}')
 
-    def generate_output(self, input_text, max_length=150, num_beams=4, temperature=1.0, top_k=50, top_p=0.95):
+    def generate_output(self, input_text, min_length=10, max_length=150, num_beams=4, temperature=1.0, top_k=50, top_p=0.95):
         if not self.model or not self.tokenizer:
             raise RuntimeError("Model and tokenizer not initialized")
 
@@ -345,6 +345,7 @@ class BaseSummarizationPipeline:
 
             outputs = self.model.generate(
                 **inputs,
+                min_length=min_length,
                 max_length=min(max_length, max_context),
                 num_beams=num_beams,
                 temperature=temperature,

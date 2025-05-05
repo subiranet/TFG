@@ -81,7 +81,7 @@ echo "Data transforming and splitting"
 python Data/Utils/transformer.py
 
 echo "Running pipeline"
-python runner.py
+python tester.py
 
 # Deactivate the virtual environment when done
 deactivate
