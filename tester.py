@@ -108,7 +108,18 @@ class TestModel(EvaluationSummarizationPipeline):
         return self.eval_dataset
 
     def generate_summaries(self):
-        self.model.eval()
+        """
+        Generate summaries for all examples in the evaluation dataset.
+
+        For each input text in the dataset:
+        1. Generates a summary using the model
+        2. Stores the generated summary in a mapping of paper_id to output
+        3. Updates the dataset with the generated output
+
+        Returns:
+            Dictionary mapping paper IDs to generated summaries
+        """
+        self.model.eval()  # Set model to evaluation mode
 
         # Create a mapping of paper_id to generated output
         generated_outputs = {}
@@ -123,7 +134,7 @@ class TestModel(EvaluationSummarizationPipeline):
             output = self.generate_output(
                 input_text=input_text,
                 min_length=100,
-                max_length=300,  # Reduced from 5000 to avoid integer overflow
+                max_length=300,
                 num_beams=4,
                 temperature=1.0
             )

@@ -61,7 +61,15 @@ class BaseSummarizationPipeline:
     }
 
     def __init__(self, config_path='./config.json'):
-        """Initialize the base pipeline with common configuration"""
+        """
+        Initialize the base summarization pipeline.
+
+        Sets up the pipeline with configuration, device detection, and metric scoring.
+        Does not load models or datasets by default - use initialize_model() for that.
+
+        Args:
+            config_path: Path to the JSON configuration file
+        """
         self.tokenizer = None
         self.model = None
         self.dataset = None
@@ -75,7 +83,18 @@ class BaseSummarizationPipeline:
         logging.info(f"Using device: {self.device}")
 
     def _load_config(self):
-        """Load configuration from JSON file"""
+        """
+        Load configuration from JSON file.
+
+        Reads and parses the configuration file specified in self.config_path.
+
+        Returns:
+            Dictionary containing configuration parameters
+
+        Raises:
+            FileNotFoundError: If the config file doesn't exist
+            JSONDecodeError: If the config file contains invalid JSON
+        """
         try:
             with open(self.config_path, 'r') as f:
                 config = json.load(f)
@@ -89,7 +108,15 @@ class BaseSummarizationPipeline:
             raise
 
     def _get_data_directory(self):
-        """Generate data directory path from config"""
+        """
+        Generate data directory path from configuration.
+
+        Creates a directory name based on the data split percentages and total count.
+        Format: "{train%}-{test%}-{eval%}-{total}"
+
+        Returns:
+            String path to the data directory
+        """
         data_config = self.config['data']
         self.dir_name = (f"{int(data_config['train'] * 100)}-"
                          f"{int(data_config['test'] * 100)}-"
@@ -100,12 +127,33 @@ class BaseSummarizationPipeline:
 
     @staticmethod
     def merge_sections(text, section_names):
-        """Merge document sections with their titles"""
+        """
+        Merge document sections with their corresponding titles.
+
+        Args:
+            text: List of section content (each section can be a list of strings)
+            section_names: List of section titles
+
+        Returns:
+            String with formatted sections where each section has its title
+        """
         return '\n\n'.join([f'{title}: {"".join(content)}' for title, content in zip(section_names, text)])
 
     @staticmethod
     def preprocess(examples):
-        """Process individual examples before tokenization"""
+        """
+        Process individual examples before tokenization.
+
+        Formats the input by combining title, domains, and section text.
+        Creates a structured input with clear section headers.
+
+        Args:
+            examples: Dictionary containing raw dataset examples with keys:
+                     'title', 'text', 'section_names', 'domain', 'abstract'
+
+        Returns:
+            Dictionary with 'input_text' and 'target_text' lists
+        """
         processed = {'input_text': [], 'target_text': []}
 
         for i in range(len(examples['title'])):
@@ -123,7 +171,19 @@ class BaseSummarizationPipeline:
         return processed
 
     def tokenize_data(self, examples):
-        """Tokenize the processed examples with special handling for Mistral models"""
+        """
+        Tokenize the processed examples for model training or inference.
+
+        Handles different tokenization approaches based on model type:
+        - For encoder-decoder models (BART, Pegasus, T5): Tokenizes inputs and targets separately
+        - For causal models (Mistral, TinyLlama): Combines input and target with special formatting
+
+        Args:
+            examples: Dictionary containing 'input_text' and 'target_text' lists
+
+        Returns:
+            Dictionary with tokenized inputs ready for the model
+        """
         model_info = self.MODEL_MAP[self.config['model']['name']]
 
         if model_info['type'] == 'encoder_decoder':
@@ -206,7 +266,21 @@ class BaseSummarizationPipeline:
         return model_inputs
 
     def compute_metrics(self, decoded_labels: list[str], decoded_preds: list[str]):
+        """
+        Compute evaluation metrics for summarization quality.
 
+        Args:
+            decoded_labels: List of reference/ground truth summaries
+            decoded_preds: List of model-generated summaries
+
+        Returns:
+            Dictionary containing various metrics:
+            - bleu: BLEU score
+            - rouge1/2/L: ROUGE F1 scores
+            - length_ratio: Ratio of prediction length to reference length
+            - combined_f1: Harmonic mean of BLEU and ROUGE-L
+            - final_score: Combined score with length penalty
+        """
         references = [[ref.split()] for ref in decoded_labels]
         bleu_ref = [ref.split() for ref in decoded_labels]
         candidates = [pred.split() for pred in decoded_preds]
@@ -249,7 +323,16 @@ class BaseSummarizationPipeline:
         }
 
     def compute_metrics_model(self, eval_pred):
-        """Compute BLEU and ROUGE (1, 2, L) metrics with length penalty"""
+        """
+        Compute metrics for model evaluation compatible with Hugging Face's Trainer.
+
+        Args:
+            eval_pred: Tuple of (predictions, labels) from model evaluation
+                       Can contain tensors or numpy arrays
+
+        Returns:
+            Dictionary of metrics from compute_metrics method
+        """
         predictions, labels = eval_pred
 
         # Handle the case where predictions are tuples (from generative models)
@@ -273,7 +356,19 @@ class BaseSummarizationPipeline:
 
 
     def initialize_model(self):
-        """Load tokenizer and model based on config"""
+        """
+        Initialize tokenizer and model based on configuration.
+
+        Loads the appropriate pre-trained model and tokenizer based on the
+        model name specified in the configuration. Sets up padding tokens
+        for causal language models if needed.
+
+        Returns:
+            Tuple of (tokenizer, model)
+
+        Raises:
+            ValueError: If the specified model is not supported
+        """
         model_name = self.config['model']['name']
         if model_name not in self.MODEL_MAP:
             raise ValueError(f"Model {model_name} not supported. Available models: {list(self.MODEL_MAP.keys())}")
@@ -296,8 +391,18 @@ class BaseSummarizationPipeline:
         return self.tokenizer, self.model
 
     def load_model_from_dir(self, model_dir):
+        """
+        Load a pre-trained model and tokenizer from a directory.
+
+        Args:
+            model_dir: Path to the directory containing the saved model
+
+        Raises:
+            ValueError: If the model type is not supported
+            Exception: If there's an error loading the model
+        """
         try:
-            # Extract model name from directory path
+            # Extract model name from config
             model_name = self.config['model']['name']
             if model_name not in self.MODEL_MAP:
                 raise ValueError(f"Model {model_name} not supported. Available models: {list(self.MODEL_MAP.keys())}")
@@ -326,6 +431,24 @@ class BaseSummarizationPipeline:
             logging.error(f'Error loading local model {model_dir}:\n{e}')
 
     def generate_output(self, input_text, min_length=10, max_length=150, num_beams=4, temperature=1.0, top_k=50, top_p=0.95):
+        """
+        Generate a summary for the given input text using the loaded model.
+
+        Args:
+            input_text: The text to summarize
+            min_length: Minimum length of the generated summary
+            max_length: Maximum length of the generated summary
+            num_beams: Number of beams for beam search
+            temperature: Temperature for sampling
+            top_k: Top-k sampling parameter
+            top_p: Top-p (nucleus) sampling parameter
+
+        Returns:
+            Generated summary text
+
+        Raises:
+            RuntimeError: If model or tokenizer is not initialized
+        """
         if not self.model or not self.tokenizer:
             raise RuntimeError("Model and tokenizer not initialized")
 

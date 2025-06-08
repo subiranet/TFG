@@ -18,28 +18,72 @@ logger = logging.getLogger(__name__)
 
 
 class ClearMemoryCallback(TrainerCallback):
+    """
+    Callback to clear GPU memory after each training step.
+
+    Helps prevent memory accumulation during long training runs.
+    """
     def on_step_end(self, args, state, control, **kwargs):
-        torch.cuda.empty_cache()  # Clears unused GPU memory
+        """Clear CUDA cache after each step to free unused memory"""
+        torch.cuda.empty_cache()
 
 
 class MemoryMonitorCallback(TrainerCallback):
+    """
+    Callback to monitor and log memory usage during training.
+
+    Tracks both CPU and GPU memory usage and reports at regular intervals
+    and at the end of each epoch.
+    """
     def __init__(self, log_interval=50):
+        """
+        Initialize the memory monitor.
+
+        Args:
+            log_interval: Number of steps between memory usage logs
+        """
         self.log_interval = log_interval
         self.last_epoch = -1
 
     def on_step_end(self, args, state, control, **kwargs):
+        """
+        Log memory usage at regular step intervals.
+
+        Args:
+            args: Training arguments
+            state: Current training state
+            control: Trainer control object
+            **kwargs: Additional arguments
+        """
         if state.global_step % self.log_interval == 0:
             self._log_memory(state)
 
     def on_epoch_end(self, args, state, control, **kwargs):
-        # Calculate current epoch (may be fractional)
+        """
+        Log completion message at the end of each epoch.
+
+        Args:
+            args: Training arguments
+            state: Current training state
+            control: Trainer control object
+            **kwargs: Additional arguments
+        """
         current_epoch = state.epoch
         if current_epoch > self.last_epoch:
             self.last_epoch = current_epoch
             logger.info(f"Completed epoch {int(current_epoch)}/{args.num_train_epochs} ({current_epoch/args.num_train_epochs:.1%})")
 
     def _log_memory(self, state):
-        # Get memory info
+        """
+        Collect and log memory usage information.
+
+        Gathers CPU and GPU memory statistics and combines with
+        training progress information for comprehensive logging.
+
+        Args:
+            state: Current training state containing step and loss information
+        """
+        # Get CPU memory info
         mem = psutil.virtual_memory()
         cpu_mem = f"CPU Memory - Used: {humanize.naturalsize(mem.used)} | Free: {humanize.naturalsize(mem.available)}"
 
@@ -77,7 +121,15 @@ class TrainingSummarization(BaseSummarizationPipeline):
         self.eval_dataset = None
 
     def load_data(self):
-        """Load dataset from JSON files based on config"""
+        """
+        Load dataset from JSON files based on configuration.
+
+        Uses the data directory path from _get_data_directory() to locate
+        the train.json and test.json files, then loads them as a dataset.
+
+        Returns:
+            The loaded dataset object
+        """
         data_dir = self._get_data_directory()
         train_path = os.path.join(data_dir, "train.json")
         test_path = os.path.join(data_dir, "test.json")
@@ -91,7 +143,17 @@ class TrainingSummarization(BaseSummarizationPipeline):
         return self.dataset
 
     def prepare_datasets(self):
-        """Apply preprocessing and tokenization to datasets"""
+        """
+        Apply preprocessing and tokenization to datasets.
+
+        Processes the raw dataset by:
+        1. Applying the preprocess method to format inputs and targets
+        2. Tokenizing the processed data for model input
+        3. Creating separate train and evaluation datasets
+
+        Returns:
+            Tuple of (train_dataset, eval_dataset)
+        """
         logger.info("Preprocessing datasets...")
         processed_dataset = self.dataset.map(
             self.preprocess,
@@ -110,10 +172,22 @@ class TrainingSummarization(BaseSummarizationPipeline):
         return self.train_dataset, self.eval_dataset
 
     def train(self):
-        # Add at the start of your script
+        """
+        Train the model with configured parameters.
+
+        Sets up training arguments, initializes the trainer with appropriate
+        callbacks for monitoring, and runs the training process.
+
+        Returns:
+            Training results from the Hugging Face Trainer
+
+        Raises:
+            RuntimeError: If CUDA out of memory error occurs
+            KeyboardInterrupt: If training is interrupted by user
+        """
+        # Configure CUDA memory allocation
         import os
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
-        """Train the model with configured parameters"""
         logger.info("Setting up training...")
         train_config = self.config['train']
 
@@ -121,7 +195,7 @@ class TrainingSummarization(BaseSummarizationPipeline):
         batch_size = 4  # per_device_train_batch_size
         desired_effective_batch_size = 1000
         gradient_accumulation_steps = desired_effective_batch_size // batch_size
-        
+
         samples_per_epoch = self.config['data']['total'] * self.config['data']['train']
         steps_per_epoch = samples_per_epoch // (batch_size * gradient_accumulation_steps)
         max_steps = int(steps_per_epoch * train_config['epochs'])
@@ -175,11 +249,33 @@ class TrainingSummarization(BaseSummarizationPipeline):
 
         # Add a custom callback to monitor gradients
         class GradientMonitorCallback(TrainerCallback):
+            """
+            Callback to monitor gradient flow during training.
+
+            Checks if gradients are being properly computed and reports
+            the maximum gradient norm to help diagnose training issues.
+            """
             def __init__(self, log_interval=10):
+                """
+                Initialize the gradient monitor.
+
+                Args:
+                    log_interval: Number of steps between gradient checks
+                """
                 self.log_interval = log_interval
 
             def on_step_end(self, args, state, control, model=None, **kwargs):
-                if state.global_step % self.log_interval == 0:  # Check every N steps
+                """
+                Check and log gradient information at regular intervals.
+
+                Args:
+                    args: Training arguments
+                    state: Current training state
+                    control: Trainer control object
+                    model: The model being trained
+                    **kwargs: Additional arguments
+                """
+                if state.global_step % self.log_interval == 0:
                     # Check if gradients are being computed
                     has_gradients = False
                     max_grad = 0.0
@@ -218,6 +314,18 @@ class TrainingSummarization(BaseSummarizationPipeline):
         return training_results
 
     def save_model(self, output_dir='./Models'):
+        """
+        Save the trained model and tokenizer to disk.
+
+        Creates a directory with the model name and data configuration,
+        then saves both the model and tokenizer to that location.
+
+        Args:
+            output_dir: Base directory where the model will be saved
+
+        Raises:
+            ValueError: If the model hasn't been trained yet
+        """
         if not hasattr(self, 'trainer'):
             raise ValueError("Model must be trained before saving")
 
@@ -231,8 +339,20 @@ class TrainingSummarization(BaseSummarizationPipeline):
 
 
 def main():
+    """
+    Main entry point for the training script.
+
+    Orchestrates the complete training pipeline:
+    1. Initializes the training pipeline
+    2. Loads and prepares datasets
+    3. Initializes the model
+    4. Trains the model
+    5. Saves the trained model
+
+    Handles exceptions and provides error reporting.
+    """
     try:
-        # Initialize trainer
+        # Initialize training pipeline
         trainer = TrainingSummarization()
 
         # Load data
